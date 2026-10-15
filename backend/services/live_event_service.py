@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from backend.ai.contracts import FrameAnalysis, TrackAnalysis
+from backend.ai.threat_detector import ThreatAndObjectDetector
 from backend.app.config import (
     ALERT_COOLDOWN_SECONDS,
     RESTRICTED_ZONE_ALERT_COOLDOWN_SECONDS,
@@ -313,7 +314,8 @@ class LiveEventRecorder:
                 zone.id,
                 _ZoneDwellState(entered_at=timestamp),
             )
-            if timestamp - dwell.entered_at < self.restricted_zone_dwell_seconds:
+            dwell_time = timestamp - dwell.entered_at
+            if dwell_time < self.restricted_zone_dwell_seconds:
                 continue
             if dwell.alert_recorded:
                 continue
@@ -325,11 +327,16 @@ class LiveEventRecorder:
                 continue
             if track not in pending_logs:
                 pending_logs.append(track)
+            
+            # Phân biệt cảnh báo vùng cấm (Restricted Area) và Lảng vảng lâu (Loitering)
+            alert_type = AlertType.LOITERING if dwell_time >= (self.restricted_zone_dwell_seconds * 1.5) else AlertType.RESTRICTED_AREA
+            msg = f"Phát hiện người lảng vảng tại {zone.name} ({dwell_time:.1f}s)" if alert_type is AlertType.LOITERING else f"Phát hiện người trong khu vực {zone.name}"
+
             pending_alerts.append(
                 (
                     track,
-                    AlertType.RESTRICTED_AREA,
-                    f"Unknown person entered {zone.name}",
+                    alert_type,
+                    msg,
                 )
             )
             dwell.last_alert_at = timestamp

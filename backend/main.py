@@ -11,6 +11,7 @@ from backend.routes import (
     camera_routes,
     log_routes,
     member_routes,
+    qa_routes,
     surveillance_routes,
     system_routes,
     video_analysis_routes,
@@ -52,6 +53,7 @@ def create_app(*, initialize_database: bool = True) -> FastAPI:
     application.include_router(alert_routes.router)
     application.include_router(video_analysis_routes.router)
     application.include_router(zone_routes.router)
+    application.include_router(qa_routes.router)
     return application
 
 

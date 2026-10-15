@@ -7,6 +7,7 @@ import 'logs_screen.dart';
 import 'members_screen.dart';
 import 'register_screen.dart';
 import 'surveillance_screen.dart';
+import 'video_qa_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -27,7 +28,7 @@ class _MainShellState extends State<MainShell> {
       child: DashboardScreen(
         onStartSurveillance: () => _selectPage(3),
         onRegisterPerson: () => _selectPage(2),
-        onViewLogs: () => _selectPage(4),
+        onViewLogs: () => _selectPage(5),
       ),
     ),
     _NavPage(
@@ -53,6 +54,12 @@ class _MainShellState extends State<MainShell> {
       icon: Icons.videocam_outlined,
       selectedIcon: Icons.videocam,
       child: SurveillanceScreen(),
+    ),
+    const _NavPage(
+      title: 'Video QA',
+      icon: Icons.psychology_outlined,
+      selectedIcon: Icons.psychology,
+      child: VideoQAScreen(),
     ),
     const _NavPage(
       title: 'Logs',

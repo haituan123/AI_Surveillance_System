@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from backend.app.database import create_schema
+from backend.app.database import SCHEMA_VERSION, create_schema
 from backend.main import create_app
 from backend.routes.system_routes import get_readiness_service
 from backend.services.readiness_service import ReadinessService
@@ -29,7 +29,7 @@ class ReadinessTestCase(unittest.TestCase):
 
         self.assertEqual(result["status"], "ready")
         self.assertTrue(result["database"]["ready"])
-        self.assertEqual(result["database"]["schema_version"], 2)
+        self.assertEqual(result["database"]["schema_version"], SCHEMA_VERSION)
         self.assertTrue(result["storage"]["ready"])
         self.assertTrue(result["ai_assets"]["lazy_loading"])
 

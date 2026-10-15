@@ -58,6 +58,12 @@ class DatabaseSchemaTestCase(unittest.TestCase):
                 "detection_logs",
                 "alerts",
                 "zones",
+                "video_frames",
+                "detected_entities",
+                "danger_threats",
+                "qa_conversations",
+                "qa_messages",
+                "qa_evidences",
             }.issubset(self.table_names())
         )
         version = self.connection.execute("PRAGMA user_version").fetchone()[0]

@@ -237,25 +237,53 @@ class _RecentAlertsPanel extends StatelessWidget {
           )
         else
           ...alerts.map(
-            (alert) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: Card(
-                child: ListTile(
-                  leading: Icon(
-                    alert.isRead
-                        ? Icons.notifications_none
-                        : Icons.notification_important,
-                    color: alert.isRead
-                        ? AppColors.textMuted
-                        : AppColors.danger,
-                  ),
-                  title: Text(alert.message),
-                  subtitle: Text(
-                    '${alert.cameraName} · ${formatBackendTimestamp(alert.createdAt)}',
+            (alert) {
+              IconData icon = Icons.notifications_none;
+              Color color = AppColors.danger;
+              switch (alert.category) {
+                case AlertCategory.knifeThreat:
+                case AlertCategory.weaponDrawn:
+                  icon = Icons.warning_amber_rounded;
+                  color = AppColors.danger;
+                  break;
+                case AlertCategory.fireSmoke:
+                  icon = Icons.local_fire_department;
+                  color = Colors.deepOrange;
+                  break;
+                case AlertCategory.theft:
+                  icon = Icons.front_hand_outlined;
+                  color = AppColors.warning;
+                  break;
+                case AlertCategory.loitering:
+                  icon = Icons.timelapse;
+                  color = Colors.deepPurple;
+                  break;
+                case AlertCategory.restrictedArea:
+                  icon = Icons.fence;
+                  color = AppColors.warning;
+                  break;
+                case AlertCategory.unknownPerson:
+                  icon = Icons.person_off_outlined;
+                  color = AppColors.danger;
+                  break;
+                default:
+                  icon = alert.isRead ? Icons.notifications_none : Icons.notification_important;
+                  color = alert.isRead ? AppColors.textMuted : AppColors.danger;
+              }
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: Card(
+                  child: ListTile(
+                    leading: Icon(icon, color: alert.isRead ? AppColors.textMuted : color),
+                    title: Text('${alert.categoryTitle}: ${alert.message}'),
+                    subtitle: Text(
+                      '${alert.cameraName} · ${formatBackendTimestamp(alert.createdAt)}',
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
       ],
     );

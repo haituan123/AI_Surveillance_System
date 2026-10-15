@@ -17,3 +17,21 @@ backend/models/
 *.npy
 .env
 .DS_Store
+
+# Environments & IDE
+.venv/
+venv/
+ENV/
+env/
+.idea/
+.vscode/
+
+# Build and caches
+Backend2/
+build/
+app_flutter/build/
+app_flutter/android/build/
+.dart_tool/
+app_flutter/.dart_tool/
+*.log
+backend/*.log

@@ -274,3 +274,64 @@ class Zone(BaseModel):
     is_active: bool
     created_at: str
     updated_at: str
+
+
+# ==================== QA QUESTION ANSWERING SCHEMAS ====================
+class QAConversationCreate(BaseModel):
+    title: str = Field(default="Phiên hỏi đáp an ninh", max_length=200)
+
+
+class QAConversation(BaseModel):
+    id: int
+    title: str
+    created_at: str
+    message_count: int = 0
+
+
+class QAAskRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=2000)
+    conversation_id: int | None = None
+    camera_id: int | None = None
+    session_or_video_id: str | None = None
+
+
+class QAEvidence(BaseModel):
+    id: int
+    message_id: int
+    frame_id: int | None = None
+    start_timestamp: float
+    end_timestamp: float
+    snapshot_path: str
+    highlight_bbox: list[int] | None = None
+    explanation: str | None = None
+
+
+class QAMessage(BaseModel):
+    id: int
+    conversation_id: int
+    user_query_vi: str
+    translated_query_en: str
+    reasoning_en: str | None = None
+    response_vi: str
+    question_type: str
+    created_at: str
+    evidences: list[QAEvidence] = []
+
+
+class QAConversationDetail(BaseModel):
+    conversation: QAConversation
+    messages: list[QAMessage]
+    uploaded_videos: list["QAUploadedVideo"] = []
+
+
+class QAUploadedVideo(BaseModel):
+    id: int
+    conversation_id: int
+    video_id: str
+    filename: str
+    status: str
+    processed_frames: int = 0
+    total_frames: int | None = None
+    error_message: str | None = None
+    created_at: str
+    completed_at: str | None = None

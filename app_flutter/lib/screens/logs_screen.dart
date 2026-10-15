@@ -759,6 +759,43 @@ class _AlertRow extends StatelessWidget {
   final ValueChanged<bool> onSelected;
   final VoidCallback onToggleRead;
 
+  IconData get _categoryIcon {
+    switch (alert.category) {
+      case AlertCategory.knifeThreat:
+      case AlertCategory.weaponDrawn:
+        return Icons.warning_amber_rounded;
+      case AlertCategory.fireSmoke:
+        return Icons.local_fire_department;
+      case AlertCategory.theft:
+        return Icons.front_hand_outlined;
+      case AlertCategory.loitering:
+        return Icons.timelapse;
+      case AlertCategory.restrictedArea:
+        return Icons.fence;
+      case AlertCategory.unknownPerson:
+        return Icons.person_off_outlined;
+      default:
+        return alert.isRead ? Icons.notifications_none : Icons.notification_important;
+    }
+  }
+
+  Color get _categoryColor {
+    switch (alert.category) {
+      case AlertCategory.knifeThreat:
+      case AlertCategory.weaponDrawn:
+      case AlertCategory.fireSmoke:
+      case AlertCategory.violence:
+        return AppColors.danger;
+      case AlertCategory.theft:
+      case AlertCategory.restrictedArea:
+        return AppColors.warning;
+      case AlertCategory.loitering:
+        return Colors.deepPurple;
+      default:
+        return alert.isRead ? AppColors.textMuted : AppColors.danger;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return _SelectableRecordCard(
@@ -768,10 +805,8 @@ class _AlertRow extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Icon(
-            alert.isRead
-                ? Icons.notifications_none
-                : Icons.notification_important,
-            color: alert.isRead ? AppColors.textMuted : AppColors.danger,
+            _categoryIcon,
+            color: _categoryColor,
           ),
           if (!alert.isRead)
             Positioned(
@@ -780,16 +815,16 @@ class _AlertRow extends StatelessWidget {
               child: Container(
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.danger,
+                decoration: BoxDecoration(
+                  color: _categoryColor,
                   shape: BoxShape.circle,
                 ),
               ),
             ),
         ],
       ),
-      title: title,
-      subtitle: alert.cameraName,
+      title: '${alert.categoryTitle}: $title',
+      subtitle: '${alert.cameraName} • ${alert.message}',
       timestamp: formatBackendTimestamp(alert.createdAt),
       trailing: TextButton(
         onPressed: onToggleRead,

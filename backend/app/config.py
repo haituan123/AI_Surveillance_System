@@ -4,6 +4,26 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[1]
 
 
+def _load_env_file() -> None:
+    for env_path in [BASE_DIR / ".env", BASE_DIR.parent / ".env"]:
+        if env_path.exists():
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            key, val = line.split("=", 1)
+                            key = key.strip()
+                            val = val.strip().strip("'\"")
+                            if key and key not in os.environ:
+                                os.environ[key] = val
+            except Exception:
+                pass
+
+
+_load_env_file()
+
+
 def _path_setting(name: str, default: Path) -> Path:
     configured = os.getenv(name)
     if not configured:
@@ -31,6 +51,10 @@ CORS_ORIGINS = [
     for origin in os.getenv("CORS_ORIGINS", "*").split(",")
     if origin.strip()
 ]
+
+# Google Gemini API Settings for Video QA
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 DATA_DIR = _path_setting("DATA_DIR", BASE_DIR / "data")
 DATABASE_PATH = _path_setting("DATABASE_PATH", BASE_DIR / "database" / "app.db")

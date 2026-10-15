@@ -18,6 +18,12 @@ REQUIRED_TABLES = {
     "detection_logs",
     "alerts",
     "zones",
+    "video_frames",
+    "detected_entities",
+    "danger_threats",
+    "qa_conversations",
+    "qa_messages",
+    "qa_evidences",
 }
 
 

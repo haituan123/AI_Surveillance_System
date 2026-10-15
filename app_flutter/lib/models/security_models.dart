@@ -303,6 +303,18 @@ class DetectionLogModel {
   final String detectedAt;
 }
 
+enum AlertCategory {
+  unknownPerson,
+  restrictedArea,
+  loitering,
+  knifeThreat,
+  weaponDrawn,
+  fireSmoke,
+  theft,
+  violence,
+  general,
+}
+
 class AlertModel {
   const AlertModel({
     required this.id,
@@ -334,4 +346,51 @@ class AlertModel {
   final bool isRead;
   final String createdAt;
   final String? snapshotUrl;
+
+  AlertCategory get category {
+    switch (alertType) {
+      case 'unknown_person':
+        return AlertCategory.unknownPerson;
+      case 'restricted_area':
+        return AlertCategory.restrictedArea;
+      case 'loitering':
+        return AlertCategory.loitering;
+      case 'knife_threat':
+        return AlertCategory.knifeThreat;
+      case 'weapon_drawn':
+        return AlertCategory.weaponDrawn;
+      case 'fire_smoke':
+        return AlertCategory.fireSmoke;
+      case 'theft':
+        return AlertCategory.theft;
+      case 'violence':
+        return AlertCategory.violence;
+      default:
+        return AlertCategory.general;
+    }
+  }
+
+  String get categoryTitle {
+    switch (category) {
+      case AlertCategory.unknownPerson:
+        return 'Người lạ';
+      case AlertCategory.restrictedArea:
+        return 'Vùng cấm';
+      case AlertCategory.loitering:
+        return 'Lảng vảng';
+      case AlertCategory.knifeThreat:
+        return 'Cầm dao / Vũ khí nhọn';
+      case AlertCategory.weaponDrawn:
+        return 'Vũ khí nguy hiểm';
+      case AlertCategory.fireSmoke:
+        return 'Cháy nổ / Khói';
+      case AlertCategory.theft:
+        return 'Lấy trộm đồ vật';
+      case AlertCategory.violence:
+        return 'Hành vi bạo lực';
+      case AlertCategory.general:
+        return 'Cảnh báo an ninh';
+    }
+  }
 }
+
