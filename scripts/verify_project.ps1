@@ -1,9 +1,11 @@
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+$venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
+$pythonCommand = if (Test-Path -LiteralPath $venvPython) { $venvPython } else { "python" }
 Set-Location -LiteralPath $projectRoot
 
 $env:PYTHONDONTWRITEBYTECODE = "1"
-python -m unittest discover -s backend/tests -v
+& $pythonCommand -m unittest discover -s backend/tests -v
 if ($LASTEXITCODE -ne 0) {
     throw "Backend tests failed."
 }

@@ -24,6 +24,10 @@ The Dashboard and Logs pages show persistent live-mode data only. This makes it
 clear that uploaded-video results are presentation-time results rather than
 surveillance records.
 
+The **Video Q&A** page maintains separate conversations, uploads and indexes
+footage, and displays answers with supporting frame evidence. Answer generation
+requires `GEMINI_API_KEY` in the backend environment.
+
 See the root `README.md` for full Windows/macOS setup, backend setup, model
 download, and run instructions.
 

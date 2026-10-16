@@ -6,11 +6,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+$venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
+$pythonCommand = if (Test-Path -LiteralPath $venvPython) { $venvPython } else { "python" }
 Set-Location -LiteralPath $projectRoot
 
-python -c "import fastapi, uvicorn, cv2; print('Backend dependencies OK')"
+& $pythonCommand -c "import fastapi, uvicorn, cv2; print('Backend dependencies OK')"
 if ($LASTEXITCODE -ne 0) {
-    throw "Backend dependencies are missing. Run: python -m pip install -r backend\requirements.txt"
+    throw "Backend dependencies are missing. Run: .\scripts\setup.ps1"
 }
 
 $uvicornArguments = @(
@@ -23,4 +25,4 @@ if ($Reload) {
 }
 
 Write-Host "Starting backend at http://${BindAddress}:$Port"
-python @uvicornArguments
+& $pythonCommand @uvicornArguments

@@ -1,6 +1,6 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 
-FROM python:3.12-slim AS backend
+FROM python:3.12-slim-bookworm AS backend
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -20,21 +20,22 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN python -m pip install --upgrade pip \
+ARG TORCH_VERSION=2.14.1
+ARG TORCHVISION_VERSION=0.29.1
+RUN python -m pip install --upgrade pip setuptools wheel \
+    && python -m pip install \
+        --index-url https://download.pytorch.org/whl/cpu \
+        "torch==${TORCH_VERSION}" \
+        "torchvision==${TORCHVISION_VERSION}" \
     && python -m pip install -r /app/backend/requirements.txt
 
 COPY backend /app/backend
 
 ENV BACKEND_HOST=0.0.0.0 \
     BACKEND_PORT=8000 \
-    CORS_ORIGINS=* \
     DATABASE_PATH=/app/backend/database/app.db \
     DATA_DIR=/app/backend/data \
-    MODELS_DIR=/app/backend/models \
-    UNKNOWN_CONFIRMATION_FRAMES=5 \
-    ALERT_COOLDOWN_SECONDS=10.0 \
-    RESTRICTED_ZONE_DWELL_SECONDS=5.0 \
-    RESTRICTED_ZONE_ALERT_COOLDOWN_SECONDS=30.0
+    MODELS_DIR=/app/backend/models
 
 EXPOSE 8000
 
