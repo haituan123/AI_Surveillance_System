@@ -19,6 +19,7 @@ from backend.routes import (
 )
 from backend.services.surveillance_manager import surveillance_manager
 from backend.services.video_analysis_manager import video_analysis_manager
+from backend.services.qa_video_index_manager import qa_video_index_manager
 
 
 @asynccontextmanager
@@ -28,6 +29,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
     surveillance_manager.shutdown()
     video_analysis_manager.shutdown()
+    qa_video_index_manager.shutdown()
 
 
 def create_app(*, initialize_database: bool = True) -> FastAPI:

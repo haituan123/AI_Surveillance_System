@@ -22,7 +22,8 @@ from backend.app.schemas import (
     QAMessage,
     QAUploadedVideo,
 )
-from backend.services.qa_service import QAService
+from backend.services.qa_service import QAService, QAVideoCleanupError
+from backend.services.qa_video_index_manager import QAVideoIndexStopTimeoutError
 
 router = APIRouter(prefix="/qa", tags=["Question Answering"])
 
@@ -82,7 +83,12 @@ def delete_conversation(
     conversation_id: int,
     service: QAService = Depends(get_qa_service),
 ) -> None:
-    service.delete_conversation(conversation_id)
+    try:
+        service.delete_conversation(conversation_id)
+    except QAVideoIndexStopTimeoutError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except QAVideoCleanupError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 # ==================== VIDEO UPLOAD ENDPOINTS ====================
@@ -206,6 +212,10 @@ def delete_uploaded_video(
 ) -> None:
     try:
         service.delete_uploaded_video(video_id)
+    except QAVideoIndexStopTimeoutError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except QAVideoCleanupError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -224,6 +234,10 @@ def retry_uploaded_video(
 ) -> QAUploadedVideo:
     try:
         return service.retry_uploaded_video(video_id)
+    except QAVideoIndexStopTimeoutError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except QAVideoCleanupError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
