@@ -1,10 +1,11 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:http/http.dart' as http;
 
 import '../core/api_config.dart';
 import '../theme/app_tokens.dart';
+import 'localized_text.dart';
 
 class ConnectionChip extends StatefulWidget {
   const ConnectionChip({super.key});
@@ -61,7 +62,7 @@ class _ConnectionChipState extends State<ConnectionChip> {
       avatar: Icon(Icons.circle, size: 12, color: color),
       label: Text(label),
       visualDensity: VisualDensity.compact,
-      side: const BorderSide(color: AppColors.border),
+      side: BorderSide(color: AppColors.border),
       backgroundColor: AppColors.surface,
       labelStyle: TextStyle(fontWeight: FontWeight.w700, color: color),
     );

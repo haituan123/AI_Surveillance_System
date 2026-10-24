@@ -1,6 +1,7 @@
 import 'package:app_flutter/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   final viewports = <String, Size>{
@@ -11,6 +12,7 @@ void main() {
 
   for (final entry in viewports.entries) {
     testWidgets('renders main shell at ${entry.key} size', (tester) async {
+      SharedPreferences.setMockInitialValues({});
       await _setViewport(tester, entry.value);
       await tester.pumpWidget(const FaceSecurityApp());
       await tester.pump();
@@ -38,6 +40,27 @@ void main() {
       expect(find.text('Persistent Logs & Alerts'), findsOneWidget);
     });
   }
+
+  testWidgets('settings switch language and theme', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await _setViewport(tester, const Size(1440, 900));
+    await tester.pumpWidget(const FaceSecurityApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings_outlined).first);
+    await tester.pumpAndSettle();
+    expect(find.text('Settings'), findsWidgets);
+
+    await tester.tap(find.text('Vietnamese'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cài đặt'), findsWidgets);
+    expect(find.text('Tổng quan vận hành'), findsOneWidget);
+
+    await tester.tap(find.text('Tối'));
+    await tester.pumpAndSettle();
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+  });
 }
 
 Future<void> _setViewport(WidgetTester tester, Size size) async {

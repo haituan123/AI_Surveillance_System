@@ -1,7 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import '../core/app_localization.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/connection_chip.dart';
+import '../widgets/localized_text.dart';
+import '../widgets/settings_panel.dart';
 import 'dashboard_screen.dart';
 import 'logs_screen.dart';
 import 'members_screen.dart';
@@ -21,53 +24,53 @@ class _MainShellState extends State<MainShell> {
   int _membersRefreshToken = 0;
 
   List<_NavPage> get _pages => [
-    _NavPage(
-      title: 'Dashboard',
-      icon: Icons.dashboard_outlined,
-      selectedIcon: Icons.dashboard,
-      child: DashboardScreen(
-        onStartSurveillance: () => _selectPage(3),
-        onRegisterPerson: () => _selectPage(2),
-        onViewLogs: () => _selectPage(5),
-      ),
-    ),
-    _NavPage(
-      title: 'Members',
-      icon: Icons.people_alt_outlined,
-      selectedIcon: Icons.people_alt,
-      child: MembersScreen(
-        refreshToken: _membersRefreshToken,
-        onMembersChanged: _notifyMembersChanged,
-      ),
-    ),
-    _NavPage(
-      title: 'Register',
-      icon: Icons.person_add_alt_1_outlined,
-      selectedIcon: Icons.person_add_alt_1,
-      child: RegisterScreen(
-        refreshToken: _membersRefreshToken,
-        onMembersChanged: _notifyMembersChanged,
-      ),
-    ),
-    const _NavPage(
-      title: 'Surveillance',
-      icon: Icons.videocam_outlined,
-      selectedIcon: Icons.videocam,
-      child: SurveillanceScreen(),
-    ),
-    const _NavPage(
-      title: 'Video QA',
-      icon: Icons.psychology_outlined,
-      selectedIcon: Icons.psychology,
-      child: VideoQAScreen(),
-    ),
-    const _NavPage(
-      title: 'Logs',
-      icon: Icons.receipt_long_outlined,
-      selectedIcon: Icons.receipt_long,
-      child: LogsScreen(),
-    ),
-  ];
+        _NavPage(
+          title: 'Dashboard',
+          icon: Icons.dashboard_outlined,
+          selectedIcon: Icons.dashboard,
+          child: DashboardScreen(
+            onStartSurveillance: () => _selectPage(3),
+            onRegisterPerson: () => _selectPage(2),
+            onViewLogs: () => _selectPage(5),
+          ),
+        ),
+        _NavPage(
+          title: 'Members',
+          icon: Icons.people_alt_outlined,
+          selectedIcon: Icons.people_alt,
+          child: MembersScreen(
+            refreshToken: _membersRefreshToken,
+            onMembersChanged: _notifyMembersChanged,
+          ),
+        ),
+        _NavPage(
+          title: 'Register',
+          icon: Icons.person_add_alt_1_outlined,
+          selectedIcon: Icons.person_add_alt_1,
+          child: RegisterScreen(
+            refreshToken: _membersRefreshToken,
+            onMembersChanged: _notifyMembersChanged,
+          ),
+        ),
+        const _NavPage(
+          title: 'Surveillance',
+          icon: Icons.videocam_outlined,
+          selectedIcon: Icons.videocam,
+          child: SurveillanceScreen(),
+        ),
+        const _NavPage(
+          title: 'Video QA',
+          icon: Icons.psychology_outlined,
+          selectedIcon: Icons.psychology,
+          child: VideoQAScreen(),
+        ),
+        const _NavPage(
+          title: 'Logs',
+          icon: Icons.receipt_long_outlined,
+          selectedIcon: Icons.receipt_long,
+          child: LogsScreen(),
+        ),
+      ];
 
   void _selectPage(int index) {
     setState(() {
@@ -101,6 +104,7 @@ class _MainShellState extends State<MainShell> {
           : AppBar(
               title: Text(page.title),
               actions: const [
+                SettingsButton(),
                 Padding(
                   padding: EdgeInsets.only(right: 16),
                   child: ConnectionChip(),
@@ -115,7 +119,7 @@ class _MainShellState extends State<MainShell> {
                   selectedIndex: _selectedIndex,
                   onSelected: _selectPage,
                 ),
-                const VerticalDivider(width: 1, color: AppColors.border),
+                VerticalDivider(width: 1, color: AppColors.border),
                 Expanded(child: body),
               ],
             )
@@ -130,7 +134,7 @@ class _MainShellState extends State<MainShell> {
                     (page) => NavigationDestination(
                       icon: Icon(page.icon),
                       selectedIcon: Icon(page.selectedIcon),
-                      label: page.title,
+                      label: context.tr(page.title),
                     ),
                   )
                   .toList(),
@@ -175,16 +179,16 @@ class _DesktopSidebar extends StatelessWidget {
                       color: AppColors.tealSoft,
                       borderRadius: BorderRadius.circular(AppRadii.sm),
                     ),
-                    child: const Icon(Icons.security, color: AppColors.teal),
+                    child: Icon(Icons.security, color: AppColors.teal),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
                       'AI Face Security',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.text,
-                      ),
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.text,
+                          ),
                     ),
                   ),
                 ],
@@ -202,6 +206,8 @@ class _DesktopSidebar extends StatelessWidget {
               ),
               const Spacer(),
               const ConnectionChip(),
+              const SizedBox(height: AppSpacing.sm),
+              const SettingsButton(expanded: true),
             ],
           ),
         ),
@@ -243,9 +249,10 @@ class _SidebarDestination extends StatelessWidget {
                 child: Text(
                   page.title,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: color,
-                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-                  ),
+                        color: color,
+                        fontWeight:
+                            selected ? FontWeight.w900 : FontWeight.w700,
+                      ),
                 ),
               ),
             ],

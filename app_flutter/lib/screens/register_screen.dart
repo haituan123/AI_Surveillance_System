@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+
+import '../core/app_localization.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../models/member_model.dart';
@@ -7,6 +9,7 @@ import '../theme/app_tokens.dart';
 import '../widgets/app_message.dart';
 import '../widgets/app_page.dart';
 import '../widgets/header_block.dart';
+import '../widgets/localized_text.dart';
 import '../widgets/status_badge.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -172,17 +175,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             Text(
               'Person details',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: AppColors.text,
-              ),
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.text,
+                  ),
             ),
             const SizedBox(height: AppSpacing.md),
             TextField(
               controller: _nameController,
               enabled: !_isSubmitting,
-              decoration: const InputDecoration(
-                labelText: 'Person name',
-                hintText: 'Enter the name used in alerts and logs',
+              decoration: InputDecoration(
+                labelText: context.tr('Person name'),
+                hintText: context.tr('Enter the name used in alerts and logs'),
                 prefixIcon: Icon(Icons.badge_outlined),
               ),
               textInputAction: TextInputAction.next,
@@ -211,7 +214,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.save_outlined),
+                  : Icon(Icons.save_outlined),
               label: Text(_isSubmitting ? 'Registering...' : 'Register'),
             ),
           ],
@@ -321,7 +324,7 @@ class _RejectedImageReason extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
+          Icon(
             Icons.warning_amber_outlined,
             size: 18,
             color: AppColors.warning,
@@ -369,9 +372,9 @@ class _FormFeedbackPanel extends StatelessWidget {
               child: Text(
                 message,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                ),
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
             ),
           ],
@@ -424,7 +427,7 @@ class _ImagePickerPanel extends StatelessWidget {
                     color: AppColors.tealSoft,
                     borderRadius: BorderRadius.circular(AppRadii.sm),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.add_photo_alternate_outlined,
                     color: AppColors.teal,
                   ),
@@ -456,7 +459,7 @@ class _ImagePickerPanel extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             OutlinedButton.icon(
               onPressed: submitting ? null : onPick,
-              icon: const Icon(Icons.upload_file_outlined),
+              icon: Icon(Icons.upload_file_outlined),
               label: Text(
                 images.isEmpty ? 'Choose face images' : 'Replace images',
               ),
@@ -486,8 +489,8 @@ class _ImagePickerPanel extends StatelessWidget {
                 builder: (context, constraints) {
                   final tileWidth =
                       constraints.maxWidth >= AppBreakpoints.compact
-                      ? 142.0
-                      : 118.0;
+                          ? 142.0
+                          : 118.0;
                   return Wrap(
                     spacing: AppSpacing.md,
                     runSpacing: AppSpacing.md,
@@ -508,8 +511,8 @@ class _ImagePickerPanel extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
                   onPressed: onClear,
-                  icon: const Icon(Icons.clear_all),
-                  label: const Text('Clear selection'),
+                  icon: Icon(Icons.clear_all),
+                  label: Text('Clear selection'),
                 ),
               ),
             ],
@@ -587,7 +590,7 @@ class _SelectedImageTile extends StatelessWidget {
     final preview = image.bytes == null
         ? Container(
             color: AppColors.tealSoft,
-            child: const Icon(Icons.image_outlined, color: AppColors.teal),
+            child: Icon(Icons.image_outlined, color: AppColors.teal),
           )
         : Image.memory(image.bytes!, fit: BoxFit.cover, gaplessPlayback: true);
 
@@ -613,8 +616,8 @@ class _SelectedImageTile extends StatelessWidget {
                     child: IconButton.filledTonal(
                       visualDensity: VisualDensity.compact,
                       onPressed: onRemove,
-                      icon: const Icon(Icons.close, size: 16),
-                      tooltip: 'Remove image',
+                      icon: Icon(Icons.close, size: 16),
+                      tooltip: context.tr('Remove image'),
                     ),
                   ),
                 ],
@@ -629,15 +632,15 @@ class _SelectedImageTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       _formatBytes(image.size),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textMuted,
-                      ),
+                            color: AppColors.textMuted,
+                          ),
                     ),
                   ],
                 ),

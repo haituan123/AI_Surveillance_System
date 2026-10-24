@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
 import '../theme/app_tokens.dart';
+import 'localized_text.dart';
 
 class HeaderBlock extends StatelessWidget {
   const HeaderBlock({
@@ -24,9 +25,9 @@ class HeaderBlock extends StatelessWidget {
           child: Text(
             title,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: AppColors.text,
-            ),
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.text,
+                ),
           ),
         ),
         if (trailing != null) ...[

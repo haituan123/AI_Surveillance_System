@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
 import '../core/timestamp_formatter.dart';
 import '../models/security_models.dart';
@@ -10,6 +10,7 @@ import '../widgets/app_message.dart';
 import '../widgets/app_page.dart';
 import '../widgets/empty_panel.dart';
 import '../widgets/header_block.dart';
+import '../widgets/localized_text.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key, this.service});
@@ -150,13 +151,13 @@ class _LogsScreenState extends State<LogsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+        icon: Icon(Icons.delete_outline, color: AppColors.danger),
         title: Text(title),
         content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           FilledButton.icon(
             style: FilledButton.styleFrom(
@@ -164,8 +165,8 @@ class _LogsScreenState extends State<LogsScreen> {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.of(context).pop(true),
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('Delete'),
+            icon: Icon(Icons.delete_outline),
+            label: Text('Delete'),
           ),
         ],
       ),
@@ -233,9 +234,8 @@ class _LogsScreenState extends State<LogsScreen> {
       if (!mounted) return;
       showAppSnackBar(
         context,
-        message: count == 1
-            ? 'Deleted selected alert.'
-            : 'Deleted $count alerts.',
+        message:
+            count == 1 ? 'Deleted selected alert.' : 'Deleted $count alerts.',
         tone: AppMessageTone.success,
       );
     } catch (error) {
@@ -434,20 +434,19 @@ class _UnknownPersonLabels {
       _restrictedAlertsByLogId[alert.detectionLogId!] = alert;
     }
 
-    final unlinkedUnknownAlerts =
-        alerts
-            .where(
-              (alert) =>
-                  _isUnknownAlert(alert) &&
-                  (alert.detectionLogId == null ||
-                      !_labelsByLogId.containsKey(alert.detectionLogId)),
-            )
-            .toList()
-          ..sort((a, b) {
-            final timeComparison = a.createdAt.compareTo(b.createdAt);
-            if (timeComparison != 0) return timeComparison;
-            return a.id.compareTo(b.id);
-          });
+    final unlinkedUnknownAlerts = alerts
+        .where(
+          (alert) =>
+              _isUnknownAlert(alert) &&
+              (alert.detectionLogId == null ||
+                  !_labelsByLogId.containsKey(alert.detectionLogId)),
+        )
+        .toList()
+      ..sort((a, b) {
+        final timeComparison = a.createdAt.compareTo(b.createdAt);
+        if (timeComparison != 0) return timeComparison;
+        return a.id.compareTo(b.id);
+      });
 
     final nextIndex = _labelsByLogId.length + 1;
     for (final entry in unlinkedUnknownAlerts.indexed) {
@@ -562,8 +561,8 @@ class _DetectionLogsTab extends StatelessWidget {
           title: 'Live detection history',
           action: OutlinedButton.icon(
             onPressed: logs.isEmpty || deleting ? null : onDeleteAll,
-            icon: const Icon(Icons.delete_sweep_outlined),
-            label: const Text('Delete all logs'),
+            icon: Icon(Icons.delete_sweep_outlined),
+            label: Text('Delete all logs'),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -628,8 +627,8 @@ class _AlertsTab extends StatelessWidget {
           title: 'Alert inbox',
           action: OutlinedButton.icon(
             onPressed: alerts.isEmpty || deleting ? null : onDeleteAll,
-            icon: const Icon(Icons.delete_sweep_outlined),
-            label: const Text('Delete all alerts'),
+            icon: Icon(Icons.delete_sweep_outlined),
+            label: Text('Delete all alerts'),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -678,9 +677,9 @@ class _TabActionRow extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: AppColors.text,
-              ),
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.text,
+                  ),
             ),
           ],
         );
@@ -775,7 +774,9 @@ class _AlertRow extends StatelessWidget {
       case AlertCategory.unknownPerson:
         return Icons.person_off_outlined;
       default:
-        return alert.isRead ? Icons.notifications_none : Icons.notification_important;
+        return alert.isRead
+            ? Icons.notifications_none
+            : Icons.notification_important;
     }
   }
 
@@ -861,8 +862,8 @@ class _SelectableRecordCard extends StatelessWidget {
     final borderColor = selected
         ? AppColors.teal
         : severe
-        ? AppColors.dangerBorder
-        : AppColors.border;
+            ? AppColors.dangerBorder
+            : AppColors.border;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Card(
@@ -886,7 +887,7 @@ class _SelectableRecordCard extends StatelessWidget {
                       height: 48,
                       child: Center(
                         child: selected
-                            ? const Icon(Icons.check_box, color: AppColors.teal)
+                            ? Icon(Icons.check_box, color: AppColors.teal)
                             : null,
                       ),
                     ),
@@ -901,7 +902,9 @@ class _SelectableRecordCard extends StatelessWidget {
                             title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
                                 ?.copyWith(
                                   fontWeight: FontWeight.w900,
                                   color: AppColors.text,
@@ -912,7 +915,9 @@ class _SelectableRecordCard extends StatelessWidget {
                             '$subtitle · $timestamp',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
                                 ?.copyWith(color: AppColors.textMuted),
                           ),
                         ],
@@ -979,14 +984,14 @@ class _SelectionToolbar extends StatelessWidget {
               child: Text(
                 label,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.tealDark,
-                  fontWeight: FontWeight.w900,
-                ),
+                      color: AppColors.tealDark,
+                      fontWeight: FontWeight.w900,
+                    ),
               ),
             ),
             TextButton(
               onPressed: deleting ? null : onClear,
-              child: const Text('Clear selection'),
+              child: Text('Clear selection'),
             ),
             const SizedBox(width: AppSpacing.sm),
             FilledButton.icon(
@@ -1000,7 +1005,7 @@ class _SelectionToolbar extends StatelessWidget {
                       dimension: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.delete_outline),
+                  : Icon(Icons.delete_outline),
               label: Text(deleting ? 'Deleting' : 'Delete selected'),
             ),
           ],
@@ -1034,7 +1039,7 @@ class _LoadingRows extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             ...List.generate(
               4,
-              (_) => const Padding(
+              (_) => Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.md),
                 child: LinearProgressIndicator(),
               ),
@@ -1061,8 +1066,8 @@ class _ErrorPanel extends StatelessWidget {
       compact: true,
       action: OutlinedButton.icon(
         onPressed: onRetry,
-        icon: const Icon(Icons.refresh),
-        label: const Text('Retry'),
+        icon: Icon(Icons.refresh),
+        label: Text('Retry'),
       ),
     );
   }

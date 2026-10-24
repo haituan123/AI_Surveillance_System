@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import '../core/app_localization.dart';
 import '../core/timestamp_formatter.dart';
 import '../models/member_model.dart';
 import '../services/member_service.dart';
@@ -8,6 +9,7 @@ import '../widgets/app_message.dart';
 import '../widgets/app_page.dart';
 import '../widgets/empty_panel.dart';
 import '../widgets/header_block.dart';
+import '../widgets/localized_text.dart';
 import '../widgets/section_header.dart';
 import '../widgets/status_badge.dart';
 
@@ -136,8 +138,8 @@ class _MembersScreenState extends State<MembersScreen> {
                         'No registered person matches the current search filter.',
                     action: OutlinedButton.icon(
                       onPressed: _clearSearch,
-                      icon: const Icon(Icons.clear),
-                      label: const Text('Clear search'),
+                      icon: Icon(Icons.clear),
+                      label: Text('Clear search'),
                     ),
                   )
                 else
@@ -159,7 +161,7 @@ class _MembersScreenState extends State<MembersScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+          icon: Icon(Icons.delete_outline, color: AppColors.danger),
           title: Text('Delete ${member.name}?'),
           content: Text(
             'This removes ${member.name} and ${member.imageCount} saved face image(s) from the recognition database.',
@@ -167,7 +169,7 @@ class _MembersScreenState extends State<MembersScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: Text('Cancel'),
             ),
             FilledButton.icon(
               style: FilledButton.styleFrom(
@@ -175,8 +177,8 @@ class _MembersScreenState extends State<MembersScreen> {
                 foregroundColor: Colors.white,
               ),
               onPressed: () => Navigator.of(context).pop(true),
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Delete member'),
+              icon: Icon(Icons.delete_outline),
+              label: Text('Delete member'),
             ),
           ],
         );
@@ -227,14 +229,14 @@ class _MembersToolbar extends StatelessWidget {
     return TextField(
       controller: searchController,
       decoration: InputDecoration(
-        prefixIcon: const Icon(Icons.search),
-        labelText: 'Search members',
+        prefixIcon: Icon(Icons.search),
+        labelText: context.tr('Search members'),
         suffixIcon: onClearSearch == null
             ? null
             : IconButton(
                 onPressed: onClearSearch,
-                icon: const Icon(Icons.close),
-                tooltip: 'Clear search',
+                icon: Icon(Icons.close),
+                tooltip: context.tr('Clear search'),
               ),
       ),
     );
@@ -298,7 +300,7 @@ class _MemberCard extends StatelessWidget {
                   foregroundColor: AppColors.teal,
                   child: Text(
                     _initialsFor(member.name),
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -359,9 +361,9 @@ class _MemberCard extends StatelessWidget {
                   )
                 : IconButton(
                     onPressed: onDelete,
-                    icon: const Icon(Icons.delete_outline),
+                    icon: Icon(Icons.delete_outline),
                     color: AppColors.danger,
-                    tooltip: 'Delete member',
+                    tooltip: context.tr('Delete member'),
                   );
 
             if (constraints.maxWidth < AppBreakpoints.compact) {
@@ -424,7 +426,7 @@ class _MembersLoadingState extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             ...List.generate(
               3,
-              (index) => const Padding(
+              (index) => Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.md),
                 child: _LoadingMemberRow(),
               ),
@@ -446,7 +448,7 @@ class _LoadingMemberRow extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
-      child: const Padding(
+      child: Padding(
         padding: EdgeInsets.all(AppSpacing.lg),
         child: Row(
           children: [
@@ -474,8 +476,8 @@ class _MembersErrorState extends StatelessWidget {
       message: friendlyErrorMessage(message),
       action: FilledButton.icon(
         onPressed: onRetry,
-        icon: const Icon(Icons.refresh),
-        label: const Text('Retry'),
+        icon: Icon(Icons.refresh),
+        label: Text('Retry'),
       ),
     );
   }

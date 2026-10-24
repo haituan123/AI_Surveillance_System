@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
 import '../core/timestamp_formatter.dart';
 import '../models/security_models.dart';
@@ -11,6 +11,7 @@ import '../widgets/app_message.dart';
 import '../widgets/app_page.dart';
 import '../widgets/empty_panel.dart';
 import '../widgets/header_block.dart';
+import '../widgets/localized_text.dart';
 import '../widgets/section_header.dart';
 import '../widgets/status_tile.dart';
 
@@ -119,8 +120,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             tone: AppMessageTone.danger,
             action: OutlinedButton.icon(
               onPressed: _refresh,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              icon: Icon(Icons.refresh),
+              label: Text('Retry'),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -219,8 +220,8 @@ class _RecentAlertsPanel extends StatelessWidget {
           title: 'Recent alerts',
           trailing: TextButton.icon(
             onPressed: onViewLogs,
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('View logs'),
+            icon: Icon(Icons.open_in_new),
+            label: Text('View logs'),
           ),
         ),
         if (alerts.isEmpty)
@@ -231,8 +232,8 @@ class _RecentAlertsPanel extends StatelessWidget {
             compact: true,
             action: OutlinedButton.icon(
               onPressed: onViewLogs,
-              icon: const Icon(Icons.receipt_long_outlined),
-              label: const Text('Open logs'),
+              icon: Icon(Icons.receipt_long_outlined),
+              label: Text('Open logs'),
             ),
           )
         else
@@ -267,7 +268,9 @@ class _RecentAlertsPanel extends StatelessWidget {
                   color = AppColors.danger;
                   break;
                 default:
-                  icon = alert.isRead ? Icons.notifications_none : Icons.notification_important;
+                  icon = alert.isRead
+                      ? Icons.notifications_none
+                      : Icons.notification_important;
                   color = alert.isRead ? AppColors.textMuted : AppColors.danger;
               }
 
@@ -275,7 +278,8 @@ class _RecentAlertsPanel extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: Card(
                   child: ListTile(
-                    leading: Icon(icon, color: alert.isRead ? AppColors.textMuted : color),
+                    leading: Icon(icon,
+                        color: alert.isRead ? AppColors.textMuted : color),
                     title: Text('${alert.categoryTitle}: ${alert.message}'),
                     subtitle: Text(
                       '${alert.cameraName} · ${formatBackendTimestamp(alert.createdAt)}',

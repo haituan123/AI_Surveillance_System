@@ -3,8 +3,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
+import '../core/app_localization.dart';
 import '../models/security_models.dart';
 import '../services/security_service.dart';
 import '../theme/app_tokens.dart';
@@ -12,6 +13,7 @@ import '../widgets/app_message.dart';
 import '../widgets/app_page.dart';
 import '../widgets/empty_panel.dart';
 import '../widgets/header_block.dart';
+import '../widgets/localized_text.dart';
 import '../widgets/status_badge.dart';
 
 enum _SurveillanceMode { live, uploadedVideo }
@@ -70,8 +72,7 @@ class _SurveillanceScreenState extends State<SurveillanceScreen> {
       ]);
       final cameras = values[0] as List<CameraModel>;
       final status = values[1] as SurveillanceStatusModel;
-      final selectedCameraId =
-          status.cameraId ??
+      final selectedCameraId = status.cameraId ??
           _selectedCameraId ??
           (cameras.isEmpty ? null : cameras.first.id);
       final zones = selectedCameraId == null
@@ -161,9 +162,8 @@ class _SurveillanceScreenState extends State<SurveillanceScreen> {
   void _undoDraftZonePoint() {
     if (_draftZonePoints.isEmpty) return;
     setState(() {
-      _draftZonePoints = _draftZonePoints
-          .take(_draftZonePoints.length - 1)
-          .toList();
+      _draftZonePoints =
+          _draftZonePoints.take(_draftZonePoints.length - 1).toList();
     });
   }
 
@@ -510,16 +510,16 @@ class _SurveillanceScreenState extends State<SurveillanceScreen> {
                 Text(
                   'Camera controls',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.text,
-                  ),
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.text,
+                      ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 if (_cameras.isNotEmpty)
                   DropdownButtonFormField<int>(
                     initialValue: _selectedCameraId,
-                    decoration: const InputDecoration(
-                      labelText: 'Camera',
+                    decoration: InputDecoration(
+                      labelText: context.tr('Camera'),
                       prefixIcon: Icon(Icons.videocam_outlined),
                     ),
                     items: _cameras
@@ -540,8 +540,8 @@ class _SurveillanceScreenState extends State<SurveillanceScreen> {
                         'Add the laptop webcam before starting live surveillance.',
                     action: OutlinedButton.icon(
                       onPressed: _busy ? null : _addWebcam,
-                      icon: const Icon(Icons.add_a_photo_outlined),
-                      label: const Text('Add laptop webcam'),
+                      icon: Icon(Icons.add_a_photo_outlined),
+                      label: Text('Add laptop webcam'),
                     ),
                   ),
                 const SizedBox(height: AppSpacing.lg),
@@ -551,18 +551,18 @@ class _SurveillanceScreenState extends State<SurveillanceScreen> {
                       child: FilledButton.icon(
                         onPressed:
                             !_busy && !running && _selectedCameraId != null
-                            ? _startLive
-                            : null,
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('Start'),
+                                ? _startLive
+                                : null,
+                        icon: Icon(Icons.play_arrow),
+                        label: Text('Start'),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: !_busy && running ? _stopLive : null,
-                        icon: const Icon(Icons.stop),
-                        label: const Text('Stop'),
+                        icon: Icon(Icons.stop),
+                        label: Text('Stop'),
                       ),
                     ),
                   ],
@@ -579,8 +579,8 @@ class _SurveillanceScreenState extends State<SurveillanceScreen> {
             message: liveError,
             action: OutlinedButton.icon(
               onPressed: _busy ? null : _loadLive,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry camera'),
+              icon: Icon(Icons.refresh),
+              label: Text('Retry camera'),
             ),
           ),
         ],
@@ -591,9 +591,8 @@ class _SurveillanceScreenState extends State<SurveillanceScreen> {
           draftPoints: _draftZonePoints,
           nameController: _zoneNameController,
           onSave: _busy || _draftZonePoints.length != 4 ? null : _saveDraftZone,
-          onUndo: _busy || _draftZonePoints.isEmpty
-              ? null
-              : _undoDraftZonePoint,
+          onUndo:
+              _busy || _draftZonePoints.isEmpty ? null : _undoDraftZonePoint,
           onClear: _busy || _draftZonePoints.isEmpty ? null : _clearDraftZone,
           onToggleActive: _busy ? null : _setZoneActive,
           onDelete: _busy ? null : _deleteZone,
@@ -618,9 +617,9 @@ class _SurveillanceScreenState extends State<SurveillanceScreen> {
                 Text(
                   'Uploaded video',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.text,
-                  ),
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.text,
+                      ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
@@ -632,8 +631,8 @@ class _SurveillanceScreenState extends State<SurveillanceScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 FilledButton.icon(
                   onPressed: !_busy && status == null ? _pickAndAnalyze : null,
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text('Choose video'),
+                  icon: Icon(Icons.upload_file),
+                  label: Text('Choose video'),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 OutlinedButton.icon(
@@ -741,31 +740,31 @@ class _SurveillancePreviewCard extends StatelessWidget {
                   child: Text(
                     isLive ? 'Camera preview' : 'Video preview',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.text,
-                    ),
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.text,
+                        ),
                   ),
                 ),
                 StatusBadge(
                   label: isLive
                       ? running
-                            ? '${liveStatus!.fps.toStringAsFixed(1)} FPS'
-                            : failed
-                            ? 'Unavailable'
-                            : 'Stopped'
+                          ? '${liveStatus!.fps.toStringAsFixed(1)} FPS'
+                          : failed
+                              ? 'Unavailable'
+                              : 'Stopped'
                       : videoStatus?.state ?? 'No video',
                   icon: isLive
                       ? running
-                            ? Icons.sensors
-                            : failed
-                            ? Icons.error_outline
-                            : Icons.videocam_off_outlined
+                          ? Icons.sensors
+                          : failed
+                              ? Icons.error_outline
+                              : Icons.videocam_off_outlined
                       : Icons.movie_outlined,
                   tone: running || videoStatus?.isActive == true
                       ? StatusBadgeTone.success
                       : failed || error != null
-                      ? StatusBadgeTone.danger
-                      : StatusBadgeTone.neutral,
+                          ? StatusBadgeTone.danger
+                          : StatusBadgeTone.neutral,
                 ),
               ],
             ),
@@ -794,8 +793,7 @@ class _SurveillancePreviewCard extends StatelessWidget {
                     _PreviewOverlay(
                       icon: overlay?.icon ?? Icons.videocam_off,
                       title: overlay?.title ?? 'Waiting for frame',
-                      message:
-                          overlay?.message ??
+                      message: overlay?.message ??
                           'A preview frame will appear when analysis produces one.',
                       busy: busy,
                     ),
@@ -911,14 +909,13 @@ class _PreviewOverlay extends StatelessWidget {
                     textAlign: TextAlign.center,
                     maxLines: compact ? 1 : 2,
                     overflow: TextOverflow.ellipsis,
-                    style:
-                        (compact
-                                ? Theme.of(context).textTheme.titleMedium
-                                : Theme.of(context).textTheme.titleLarge)
-                            ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
+                    style: (compact
+                            ? Theme.of(context).textTheme.titleMedium
+                            : Theme.of(context).textTheme.titleLarge)
+                        ?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
@@ -927,9 +924,9 @@ class _PreviewOverlay extends StatelessWidget {
                     maxLines: compact ? 2 : 3,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white70,
-                      height: 1.25,
-                    ),
+                          color: Colors.white70,
+                          height: 1.25,
+                        ),
                   ),
                 ],
               ),
@@ -1010,9 +1007,9 @@ class _LiveDetectionSummary extends StatelessWidget {
             Text(
               'Last detection',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: AppColors.text,
-              ),
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.text,
+                  ),
             ),
             const SizedBox(height: AppSpacing.md),
             if (tracks.isEmpty)
@@ -1075,9 +1072,9 @@ class _RestrictedZonePanel extends StatelessWidget {
                   child: Text(
                     'Restricted zones',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.text,
-                    ),
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.text,
+                        ),
                   ),
                 ),
                 StatusBadge(
@@ -1099,9 +1096,9 @@ class _RestrictedZonePanel extends StatelessWidget {
             TextField(
               controller: nameController,
               enabled: running,
-              decoration: const InputDecoration(
-                labelText: 'Zone name',
-                hintText: 'Server door',
+              decoration: InputDecoration(
+                labelText: context.tr('Zone name'),
+                hintText: context.tr('Server door'),
                 prefixIcon: Icon(Icons.edit_location_alt_outlined),
               ),
               textInputAction: TextInputAction.done,
@@ -1113,18 +1110,18 @@ class _RestrictedZonePanel extends StatelessWidget {
               children: [
                 FilledButton.icon(
                   onPressed: onSave,
-                  icon: const Icon(Icons.save_outlined),
+                  icon: Icon(Icons.save_outlined),
                   label: Text('Save ${draftPoints.length}/4 points'),
                 ),
                 OutlinedButton.icon(
                   onPressed: onUndo,
-                  icon: const Icon(Icons.undo),
-                  label: const Text('Undo'),
+                  icon: Icon(Icons.undo),
+                  label: Text('Undo'),
                 ),
                 OutlinedButton.icon(
                   onPressed: onClear,
-                  icon: const Icon(Icons.clear),
-                  label: const Text('Clear'),
+                  icon: Icon(Icons.clear),
+                  label: Text('Clear'),
                 ),
               ],
             ),
@@ -1160,11 +1157,10 @@ class _RestrictedZonePanel extends StatelessWidget {
                         : '${zone.points.length} points · inactive',
                   ),
                   trailing: IconButton(
-                    tooltip: 'Delete zone',
-                    onPressed: onDelete == null
-                        ? null
-                        : () => onDelete!(zone.id),
-                    icon: const Icon(Icons.delete_outline),
+                    tooltip: context.tr('Delete zone'),
+                    onPressed:
+                        onDelete == null ? null : () => onDelete!(zone.id),
+                    icon: Icon(Icons.delete_outline),
                   ),
                 ),
               ),
@@ -1296,7 +1292,7 @@ class _ZoneDraftPainter extends CustomPainter {
     final painter = TextPainter(
       text: TextSpan(
         text: '$index',
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.black,
           fontSize: 11,
           fontWeight: FontWeight.w800,
@@ -1334,9 +1330,9 @@ class _VideoDetectionSummary extends StatelessWidget {
             Text(
               'Temporary events',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: AppColors.text,
-              ),
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.text,
+                  ),
             ),
             if (results != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -1403,13 +1399,14 @@ class _LiveUnknownPersonLabels {
 class _VideoUnknownPersonLabels {
   _VideoUnknownPersonLabels(List<TemporaryVideoEventModel> events) {
     final unknownEvents =
-        events.where((event) => event.status != 'known').toList()..sort((a, b) {
-          final timeComparison = a.timestampSeconds.compareTo(
-            b.timestampSeconds,
-          );
-          if (timeComparison != 0) return timeComparison;
-          return a.frameIndex.compareTo(b.frameIndex);
-        });
+        events.where((event) => event.status != 'known').toList()
+          ..sort((a, b) {
+            final timeComparison = a.timestampSeconds.compareTo(
+              b.timestampSeconds,
+            );
+            if (timeComparison != 0) return timeComparison;
+            return a.frameIndex.compareTo(b.frameIndex);
+          });
     for (final entry in unknownEvents.indexed) {
       _labelsByEvent[entry.$2] = _format(entry.$1 + 1);
     }
@@ -1542,10 +1539,10 @@ class _ErrorBanner extends StatelessWidget {
           if (onRetry != null)
             OutlinedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              icon: Icon(Icons.refresh),
+              label: Text('Retry'),
             ),
-          TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
+          TextButton(onPressed: onDismiss, child: Text('Dismiss')),
         ],
       ),
     );
