@@ -11,11 +11,12 @@ from pathlib import Path
 
 import cv2
 
-from backend.app.config import QA_VIDEO_INDEX_STOP_TIMEOUT_SECONDS
+from backend.app.config import QA_SNAPSHOTS_DIR, QA_VIDEO_INDEX_STOP_TIMEOUT_SECONDS
 from backend.app.database import get_connection
 from backend.app.models import QAUploadedVideoStatus
 from backend.services.frame_indexer_service import FrameIndexerService
 from backend.services.gallery_service import build_analysis_runtime
+from backend.services.qa_snapshot_storage import qa_video_snapshot_dir
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +42,14 @@ class QAVideoIndexManager:
         capture_factory: Callable = cv2.VideoCapture,
         runtime_factory: Callable = build_analysis_runtime,
         indexer_factory: Callable = FrameIndexerService,
+        qa_snapshots_dir: Path = QA_SNAPSHOTS_DIR,
         stop_timeout_seconds: float = QA_VIDEO_INDEX_STOP_TIMEOUT_SECONDS,
     ) -> None:
         self.connection_factory = connection_factory
         self.capture_factory = capture_factory
         self.runtime_factory = runtime_factory
         self.indexer_factory = indexer_factory
+        self.qa_snapshots_dir = Path(qa_snapshots_dir)
         self.stop_timeout_seconds = stop_timeout_seconds
         # Services hold this across registration/retry/deletion, including commit.
         # Workers never acquire it, so joining while holding it is safe.
@@ -166,7 +169,10 @@ class QAVideoIndexManager:
             if cancelled():
                 return
             sample_interval = max(1, int(input_fps))
-            indexer = self.indexer_factory(connection)
+            indexer = self.indexer_factory(
+                connection,
+                snapshots_dir=qa_video_snapshot_dir(job.video_id, qa_root=self.qa_snapshots_dir),
+            )
             if cancelled():
                 return
             runtime = self.runtime_factory(connection)

@@ -71,6 +71,7 @@ SNAPSHOTS_DIR = _path_setting(
     "SNAPSHOTS_DIR",
     DATA_DIR / "snapshots",
 )
+QA_SNAPSHOTS_DIR = SNAPSHOTS_DIR / "qa"
 TEST_VIDEOS_DIR = _path_setting(
     "TEST_VIDEOS_DIR",
     DATA_DIR / "test_videos",
@@ -154,6 +155,7 @@ RUNTIME_DIRECTORIES = (
     KNOWN_FACES_DIR,
     EMBEDDINGS_DIR,
     SNAPSHOTS_DIR,
+    QA_SNAPSHOTS_DIR,
     TEST_VIDEOS_DIR,
     TEMP_UPLOADS_DIR,
     MODELS_DIR,

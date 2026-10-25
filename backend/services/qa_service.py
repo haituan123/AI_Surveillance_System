@@ -1,5 +1,6 @@
 import json
 import logging
+import shutil
 import sqlite3
 import urllib.error
 import urllib.request
@@ -13,6 +14,7 @@ from backend.app.config import (
     SNAPSHOTS_DIR,
     TEMP_UPLOADS_DIR,
     resolve_storage_path,
+    serialize_storage_path,
 )
 from backend.app.models import QAQuestionType, QAUploadedVideoStatus
 from backend.app.schemas import (
@@ -27,6 +29,7 @@ from backend.services.qa_video_index_manager import (
     QAVideoIndexManager,
     qa_video_index_manager,
 )
+from backend.services.qa_snapshot_storage import qa_video_snapshot_dir
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +55,18 @@ class QAService:
         self.api_key = api_key
         self.model_name = model_name
         self.index_manager = index_manager
-        self.snapshots_dir = Path(snapshots_dir)
+        try:
+            self.snapshots_dir = Path(snapshots_dir).resolve()
+            qa_root = Path(index_manager.qa_snapshots_dir)
+            # Resolving must not hide an alias that the shared ownership helper
+            # would reject when the manager uses the original configured path.
+            if qa_root.is_symlink() or getattr(qa_root, "is_junction", lambda: False)():
+                raise ValueError("Q&A snapshot root cannot be a filesystem alias")
+            self.qa_snapshots_dir = qa_root.resolve()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValueError("Invalid Q&A snapshot root configuration") from exc
+        if self.qa_snapshots_dir == self.snapshots_dir or not self.qa_snapshots_dir.is_relative_to(self.snapshots_dir):
+            raise ValueError("Manager Q&A snapshot root must be strictly inside snapshots_dir")
         self.uploads_dir = Path(uploads_dir)
 
     def create_conversation(self, title: str = "Phiên hỏi đáp an ninh") -> QAConversation:
@@ -321,8 +335,7 @@ class QAService:
         """At most two keyed SELECTs, under the lifecycle lock/transaction.
 
         Frame IDs come from the current response or bounded context. Threat IDs
-        come only from that context, avoiding even a frame-filtered table scan
-        of historical threats (which have no index on frame_id).
+        come only from that context, keeping fetched data bounded as well.
         """
         candidates = []
         frame_ids: set[int] = set()
@@ -375,13 +388,17 @@ class QAService:
             if origins and not any(frame_id in current_frames for frame_id in origins):
                 continue
             if path is not None:
-                if not any(path in current_frames.get(frame_id, set()) for frame_id in origins):
+                owners = {frame_id for frame_id in origins if path in current_frames.get(frame_id, set())}
+                if len(owners) != 1:
                     continue
                 try:
                     if not path.is_file():
                         continue
                 except (OSError, ValueError):
                     continue
+                # Every new image card is owned by a surviving frame, including
+                # snapshot-only Gemini evidence. Keep canonical storage spelling.
+                evidence = {**evidence, "frame_id": owners.pop(), "snapshot_path": serialize_storage_path(path)}
             # Textual/time-range evidence without an image or frame is valid too.
             valid.append(evidence)
         return valid
@@ -973,16 +990,37 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
         # resolved paths too, since relative/absolute spellings can alias a file.
         path = None
         try:
-            snapshot_files = {
-                self._cleanup_path(path, self.snapshots_dir)
-                for paths in targets.values() for path in paths
+            directories = {
+                video_id: qa_video_snapshot_dir(video_id, qa_root=self.qa_snapshots_dir)
+                for video_id in targets
             }
-            files = snapshot_files.copy()
+            qa_root = self._cleanup_path(str(self.qa_snapshots_dir), self.snapshots_dir)
+            legacy_files: set[Path] = set()
+            for video_id, snapshot_paths in targets.items():
+                directory = directories[video_id]
+                for stored_path in snapshot_paths:
+                    path = self._cleanup_path(stored_path, self.snapshots_dir)
+                    if path != directory and path.is_relative_to(directory):
+                        continue
+                    if path.is_relative_to(qa_root):
+                        raise QAVideoCleanupError("Q&A snapshot path belongs to another video")
+                    legacy_files.add(path)
+            files = legacy_files.copy()
             if delete_file:
                 files.update(
                     self._cleanup_path(row["file_path"], self.uploads_dir)
                     for row in video_rows if row["file_path"]
                 )
+            # All directories/files in the batch have been validated. Orphans
+            # within each exact owned directory are removed with its snapshots.
+            for video_id, path in directories.items():
+                if path != qa_video_snapshot_dir(video_id, qa_root=self.qa_snapshots_dir):
+                    raise QAVideoCleanupError("Q&A snapshot directory ownership changed")
+                try:
+                    shutil.rmtree(path)
+                except FileNotFoundError:
+                    if path.exists():
+                        raise
             for path in sorted(files):
                 path.unlink(missing_ok=True)
         except (OSError, ValueError, RuntimeError) as exc:
@@ -1000,8 +1038,10 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                 """,
                 (video_id,),
             )
-        # Includes legacy NULL frame IDs and alias paths in other conversations.
-        self._delete_snapshot_evidences(snapshot_files)
+        # Only legacy flat data needs the canonical scan for unowned/alias cards.
+        # New image cards are removed by their indexed frame_id above.
+        if legacy_files:
+            self._delete_snapshot_evidences(legacy_files)
         for video_id in targets:
             for table in ("detected_entities", "danger_threats"):
                 self.connection.execute(

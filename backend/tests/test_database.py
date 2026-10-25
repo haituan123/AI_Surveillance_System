@@ -87,6 +87,22 @@ class DatabaseSchemaTestCase(unittest.TestCase):
         ).fetchone()
         self.assertEqual(camera["name"], "Laptop Webcam")
 
+    def test_delete_indexes_are_added_idempotently_to_existing_schema(self):
+        expected = {
+            "idx_qa_evidences_frame": ("qa_evidences", "frame_id"),
+            "idx_qa_evidences_message": ("qa_evidences", "message_id"),
+            "idx_danger_threats_frame": ("danger_threats", "frame_id"),
+        }
+        for name in expected:
+            self.connection.execute(f"DROP INDEX {name}")
+        self.connection.execute("PRAGMA user_version = 4")
+        create_schema(self.connection)
+        create_schema(self.connection)
+        for name, (table, column) in expected.items():
+            self.assertIn(name, {row["name"] for row in self.connection.execute(f"PRAGMA index_list({table})")})
+            self.assertEqual([row["name"] for row in self.connection.execute(f"PRAGMA index_info({name})")], [column])
+        self.assertEqual(self.connection.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+
     def test_foreign_keys_reject_session_for_missing_camera(self):
         with self.assertRaises(sqlite3.IntegrityError):
             self.connection.execute(

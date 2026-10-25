@@ -3,7 +3,7 @@ from collections.abc import Iterator
 
 from backend.app.config import DATABASE_PATH, ensure_runtime_directories
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def get_connection() -> sqlite3.Connection:
@@ -430,6 +430,15 @@ def create_schema(connection: sqlite3.Connection) -> None:
         """
     )
 
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_qa_evidences_frame ON qa_evidences(frame_id)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_qa_evidences_message ON qa_evidences(message_id)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_danger_threats_frame ON danger_threats(frame_id)"
+    )
     connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     connection.commit()
 

@@ -9,6 +9,7 @@ from backend.ai.attribute_extractor import AttributeExtractor, ColorAnalyzer
 from backend.ai.contracts import BoundingBox, FrameAnalysis, TrackAnalysis
 from backend.ai.threat_detector import ThreatAndObjectDetector
 from backend.app.database import create_schema
+from backend.app.config import resolve_storage_path
 from backend.app.models import DetectionStatus, ThreatType
 from backend.services.frame_indexer_service import FrameIndexerService
 
@@ -96,7 +97,7 @@ class FrameIndexerServiceTestCase(unittest.TestCase):
         self.addCleanup(self.tmp_dir.cleanup)
         self.service = FrameIndexerService(
             self.connection,
-            snapshots_dir=Path(self.tmp_dir.name),
+            snapshots_dir=Path(self.tmp_dir.name) / "snapshots",
         )
 
         cam = self.connection.execute(
@@ -109,6 +110,7 @@ class FrameIndexerServiceTestCase(unittest.TestCase):
         self.connection.close()
 
     def test_index_frame_saves_entities_and_threats(self):
+        self.assertFalse(self.service.snapshots_dir.exists())
         frame = np.zeros((100, 100, 3), dtype=np.uint8)
         analysis = FrameAnalysis(
             frame_index=1,
@@ -148,6 +150,8 @@ class FrameIndexerServiceTestCase(unittest.TestCase):
         vf = self.connection.execute("SELECT * FROM video_frames WHERE id = ?", (frame_id,)).fetchone()
         self.assertEqual(vf["person_count"], 1)
         self.assertEqual(vf["scene_caption_en"], "A person holding a knife near the entrance")
+        self.assertEqual(resolve_storage_path(vf["frame_path"]).parent, self.service.snapshots_dir)
+        self.assertTrue(resolve_storage_path(vf["frame_path"]).is_file())
 
         # Check detected_entities
         entities = self.connection.execute("SELECT * FROM detected_entities WHERE frame_id = ?", (frame_id,)).fetchall()
@@ -157,6 +161,17 @@ class FrameIndexerServiceTestCase(unittest.TestCase):
         threats = self.connection.execute("SELECT * FROM danger_threats WHERE frame_id = ?", (frame_id,)).fetchall()
         self.assertEqual(len(threats), 1)
         self.assertEqual(threats[0]["threat_type"], "knife_threat")
+        self.assertEqual(threats[0]["snapshot_path"], vf["frame_path"])
+
+    def test_frame_without_image_does_not_create_snapshot_directory(self):
+        self.assertFalse(self.service.snapshots_dir.exists())
+        analysis = FrameAnalysis(frame_index=0, timestamp_seconds=0, width=20, height=20, tracks=())
+        frame_id = self.service.index_frame(
+            np.zeros((20, 20, 3), dtype=np.uint8), camera_id=self.camera_id,
+            session_or_video_id="empty", timestamp_seconds=0, frame_number=0, analysis=analysis,
+        )
+        self.assertFalse(self.service.snapshots_dir.exists())
+        self.assertEqual(self.connection.execute("SELECT frame_path FROM video_frames WHERE id = ?", (frame_id,)).fetchone()[0], "")
 
 
 if __name__ == "__main__":

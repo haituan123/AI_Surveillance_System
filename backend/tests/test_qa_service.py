@@ -7,10 +7,12 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from backend.app.config import SNAPSHOTS_DIR, serialize_storage_path
 from backend.app.database import create_schema
 from backend.app.schemas import QAAskRequest
 from backend.main import create_app
 from backend.routes.qa_routes import get_qa_service
+from backend.services.qa_snapshot_storage import qa_video_snapshot_dir
 from backend.services.qa_service import QAService, QAVideoCleanupError
 from backend.services.qa_video_index_manager import QAVideoIndexManager, QAVideoIndexStopTimeoutError
 
@@ -33,8 +35,9 @@ class QAServiceTestCase(unittest.TestCase):
         self.uploads = self.root / "uploads"
         self.snapshots.mkdir()
         self.uploads.mkdir()
+        self.manager = QAVideoIndexManager(qa_snapshots_dir=self.snapshots / "qa")
         self.service = QAService(
-            self.connection, api_key="", snapshots_dir=self.snapshots, uploads_dir=self.uploads
+            self.connection, api_key="", index_manager=self.manager, snapshots_dir=self.snapshots, uploads_dir=self.uploads
         )  # Dùng fallback heuristic trong test
         self.frame_snapshot = self.snapshots / "frame_3240.jpg"
         self.threat_snapshot = self.snapshots / "threat_knife.jpg"
@@ -251,16 +254,18 @@ class QACleanupTestCase(unittest.TestCase):
         self.uploads.mkdir()
         self.connection = make_test_connection()
         self.addCleanup(self.connection.close)
-        self.manager = QAVideoIndexManager()
+        self.manager = QAVideoIndexManager(qa_snapshots_dir=self.snapshots / "qa")
         self.service = QAService(
             self.connection, api_key="", index_manager=self.manager,
             snapshots_dir=self.snapshots, uploads_dir=self.uploads,
         )
         self.conversation = self.service.create_conversation("Cleanup")
 
-    def seed_video(self, video_id="qa_cleanup", *, shared_snapshot=False):
-        snapshot = self.snapshots / f"{video_id}.jpg"
-        threat = snapshot if shared_snapshot else self.snapshots / f"{video_id}_threat.jpg"
+    def seed_video(self, video_id="qa_cleanup", *, shared_snapshot=False, new_layout=False):
+        directory = qa_video_snapshot_dir(video_id, qa_root=self.manager.qa_snapshots_dir) if new_layout else self.snapshots
+        directory.mkdir(parents=True, exist_ok=True)
+        snapshot = directory / f"{video_id}.jpg"
+        threat = snapshot if shared_snapshot else directory / f"{video_id}_threat.jpg"
         input_path = self.uploads / f"{video_id}.mp4"
         for path in (snapshot, threat, input_path):
             path.write_bytes(b"test data")
@@ -285,7 +290,7 @@ class QACleanupTestCase(unittest.TestCase):
             "INSERT INTO qa_messages (conversation_id, user_query_vi, translated_query_en, response_vi) "
             "VALUES (?, 'question', 'question', 'answer')", (self.conversation.id,),
         ).lastrowid
-        for fk, path in ((frame_id, snapshot), (None, snapshot), (None, threat)):
+        for fk, path in ((frame_id, snapshot), (frame_id if new_layout else None, snapshot), (frame_id if new_layout else None, threat)):
             self.connection.execute(
                 "INSERT INTO qa_evidences (message_id, frame_id, start_timestamp, end_timestamp, snapshot_path) "
                 "VALUES (?, ?, 0, 1, ?)", (message_id, fk, str(path)),
@@ -299,6 +304,229 @@ class QACleanupTestCase(unittest.TestCase):
     def assert_video_data_gone(self):
         for table in ("video_frames", "detected_entities", "danger_threats", "qa_evidences", "qa_uploaded_videos"):
             self.assertEqual(self.count(table), 0, table)
+
+    def test_custom_manager_root_delete_removes_owned_directory_without_legacy_scan(self):
+        self.manager = QAVideoIndexManager(qa_snapshots_dir=self.snapshots / "custom_qa")
+        self.service = QAService(
+            self.connection, api_key="", index_manager=self.manager,
+            snapshots_dir=self.snapshots, uploads_dir=self.uploads,
+        )
+        snapshot, threat, input_path = self.seed_video("target", new_layout=True)
+        orphan = snapshot.parent / "orphan.jpg"
+        orphan.write_bytes(b"unreferenced snapshot")
+        with patch.object(self.service, "_delete_snapshot_evidences", wraps=self.service._delete_snapshot_evidences) as legacy_scan:
+            self.service.delete_uploaded_video("target")
+        self.assertFalse(snapshot.parent.exists())
+        self.assertFalse(snapshot.exists())
+        self.assertFalse(threat.exists())
+        self.assertFalse(orphan.exists())
+        self.assertFalse(input_path.exists())
+        self.assertFalse((self.snapshots / "qa" / "target").exists())
+        legacy_scan.assert_not_called()
+        self.assert_video_data_gone()
+
+    def test_invalid_manager_roots_are_rejected_at_service_construction(self):
+        before = set(self.root.rglob("*"))
+        for root in (self.snapshots, self.root / "outside_qa", self.snapshots / ".." / "outside_qa"):
+            with self.subTest(root=root):
+                manager = QAVideoIndexManager(qa_snapshots_dir=root)
+                with self.assertRaisesRegex(ValueError, "strictly inside"):
+                    QAService(self.connection, index_manager=manager, snapshots_dir=self.snapshots, uploads_dir=self.uploads)
+        self.assertEqual(set(self.root.rglob("*")), before)
+
+    def test_valid_root_configuration_is_resolved_without_creating_directories(self):
+        general_root = self.root / "missing_snapshots"
+        for name in ("qa", "custom_qa", "qa_v2"):
+            with self.subTest(name=name):
+                manager = QAVideoIndexManager(qa_snapshots_dir=general_root / name)
+                service = QAService(self.connection, index_manager=manager, snapshots_dir=general_root)
+                self.assertEqual(service.snapshots_dir, general_root.resolve())
+                self.assertEqual(service.qa_snapshots_dir, manager.qa_snapshots_dir.resolve())
+                self.assertFalse(general_root.exists())
+
+    def test_production_default_root_comes_from_default_manager(self):
+        service = QAService(self.connection, api_key="")
+        self.assertEqual(service.qa_snapshots_dir, service.index_manager.qa_snapshots_dir.resolve())
+        self.assertEqual(service.qa_snapshots_dir, (SNAPSHOTS_DIR / "qa").resolve())
+
+    def test_root_alias_is_not_hidden_by_constructor_resolution(self):
+        root = self.snapshots / "custom_qa"
+        root.mkdir()
+        alias = self.snapshots / "alias_qa"
+        try:
+            alias.symlink_to(root, target_is_directory=True)
+        except OSError:
+            self.skipTest("Directory symlinks unavailable on this platform")
+        manager = QAVideoIndexManager(qa_snapshots_dir=alias)
+        with self.assertRaisesRegex(ValueError, "snapshot root configuration"):
+            QAService(self.connection, index_manager=manager, snapshots_dir=self.snapshots)
+        self.assertTrue(alias.is_symlink())
+        self.assertTrue(root.exists())
+
+    def test_new_layout_delete_removes_directory_orphans_and_preserves_other_video(self):
+        snapshot, _, input_path = self.seed_video("target", new_layout=True)
+        other_files = self.seed_video("other", new_layout=True)
+        orphan = snapshot.parent / "orphan_tmp.jpg"
+        orphan.write_bytes(b"unreferenced")
+        with patch.object(self.service, "_delete_snapshot_evidences", side_effect=AssertionError("legacy scan")):
+            self.service.delete_uploaded_video("target")
+        self.assertFalse(snapshot.parent.exists())
+        self.assertFalse(orphan.exists())
+        self.assertFalse(input_path.exists())
+        self.assertTrue(all(path.exists() for path in other_files))
+        for table in ("qa_uploaded_videos", "video_frames", "detected_entities", "danger_threats"):
+            self.assertEqual(self.count(table), 1, table)
+        self.assertEqual(self.count("qa_evidences"), 3)
+
+    def test_missing_new_layout_directory_is_idempotent(self):
+        snapshot, threat, _ = self.seed_video(new_layout=True)
+        snapshot.unlink()
+        threat.unlink()
+        snapshot.parent.rmdir()
+        self.service.delete_uploaded_video("qa_cleanup")
+        self.assert_video_data_gone()
+
+    def test_cross_video_snapshot_directory_is_rejected_before_cleanup(self):
+        target = self.seed_video("target", new_layout=True)
+        other = self.seed_video("other", new_layout=True)
+        self.connection.execute(
+            "UPDATE video_frames SET frame_path = ? WHERE session_or_video_id = 'target'", (str(other[0]),),
+        )
+        self.connection.commit()
+        with self.assertRaises(QAVideoCleanupError):
+            self.service.delete_uploaded_video("target")
+        self.assertTrue(all(path.exists() for path in target + other))
+        self.assertEqual(self.count("qa_uploaded_videos"), 2)
+
+    def test_partial_directory_removal_failure_preserves_metadata_for_retry(self):
+        snapshot, threat, input_path = self.seed_video(new_layout=True)
+
+        def partial_removal(path):
+            self.assertEqual(path, snapshot.parent)
+            snapshot.unlink()
+            raise PermissionError("directory locked")
+
+        with patch("backend.services.qa_service.shutil.rmtree", side_effect=partial_removal):
+            with self.assertRaises(QAVideoCleanupError):
+                self.service.delete_uploaded_video("qa_cleanup")
+        self.assertTrue(threat.exists())
+        self.assertTrue(input_path.exists())
+        for table in ("qa_uploaded_videos", "video_frames", "detected_entities", "danger_threats"):
+            self.assertEqual(self.count(table), 1, table)
+        self.assertEqual(self.count("qa_evidences"), 3)
+        self.service.delete_uploaded_video("qa_cleanup")
+        self.assertFalse(snapshot.parent.exists())
+        self.assertFalse(input_path.exists())
+        self.assert_video_data_gone()
+
+    def test_new_layout_conversation_delete_removes_only_its_video_directories(self):
+        target_files = [self.seed_video(video_id, new_layout=True) for video_id in ("first", "second", "third")]
+        other_files = self.seed_video("other", new_layout=True)
+        other_conv = self.service.create_conversation("Other conversation")
+        self.connection.execute("UPDATE qa_uploaded_videos SET conversation_id = ? WHERE video_id = 'other'", (other_conv.id,))
+        self.connection.execute(
+            "UPDATE qa_messages SET conversation_id = ? WHERE id = (SELECT MAX(id) FROM qa_messages)", (other_conv.id,),
+        )
+        self.connection.commit()
+
+        def cancel_many(video_ids):
+            self.assertEqual(set(video_ids), {"first", "second", "third"})
+            self.assertTrue(all(paths[0].parent.exists() for paths in target_files))
+
+        with (
+            patch.object(self.manager, "cancel_many", side_effect=cancel_many),
+            patch.object(self.service, "_delete_snapshot_evidences", side_effect=AssertionError("legacy scan")),
+        ):
+            self.service.delete_conversation(self.conversation.id)
+        for snapshot, _, input_path in target_files:
+            self.assertFalse(snapshot.parent.exists())
+            self.assertFalse(input_path.exists())
+        self.assertTrue(all(path.exists() for path in other_files))
+        for table in ("qa_conversations", "qa_messages", "qa_uploaded_videos", "video_frames"):
+            self.assertEqual(self.count(table), 1, table)
+        self.assertEqual(self.count("qa_evidences"), 3)
+
+    def test_snapshot_only_evidence_gets_unique_owner_and_canonical_path(self):
+        snapshot, _, _ = self.seed_video(new_layout=True)
+        frame_id = self.connection.execute("SELECT id FROM video_frames").fetchone()[0]
+        (snapshot.parent / "subdir").mkdir()
+        alias = str(snapshot.parent / "subdir" / ".." / snapshot.name)
+        with patch.object(self.service, "_reason_with_gemini", return_value={
+            "response_vi": "answer", "evidences": [{"snapshot_path": alias}],
+        }):
+            message = self.service.ask(QAAskRequest(question="What happened?", conversation_id=self.conversation.id))
+        self.assertEqual(len(message.evidences), 1)
+        self.assertEqual(message.evidences[0].frame_id, frame_id)
+        self.assertEqual(message.evidences[0].snapshot_path, serialize_storage_path(snapshot))
+        row = self.connection.execute("SELECT frame_id, snapshot_path FROM qa_evidences WHERE id = ?", (message.evidences[0].id,)).fetchone()
+        self.assertEqual(tuple(row), (frame_id, serialize_storage_path(snapshot)))
+        with patch.object(self.service, "_delete_snapshot_evidences", side_effect=AssertionError("legacy scan")):
+            self.service.delete_uploaded_video("qa_cleanup")
+        self.assert_video_data_gone()
+
+    def test_ambiguous_snapshot_only_evidence_is_not_assigned_an_owner(self):
+        snapshot, _, _ = self.seed_video(new_layout=True)
+        self.connection.execute(
+            "INSERT INTO video_frames (session_or_video_id, timestamp_seconds, frame_number, frame_path) "
+            "VALUES ('qa_cleanup', 1, 1, ?)", (str(snapshot),),
+        )
+        self.connection.commit()
+        with patch.object(self.service, "_reason_with_gemini", return_value={
+            "response_vi": "answer", "evidences": [{"snapshot_path": str(snapshot)}],
+        }):
+            message = self.service.ask(QAAskRequest(question="What happened?", conversation_id=self.conversation.id))
+        self.assertEqual(message.evidences, [])
+
+    def test_mixed_layout_preserves_legacy_alias_cleanup(self):
+        snapshot, threat, _ = self.seed_video(new_layout=True)
+        legacy = self.snapshots / "legacy.jpg"
+        threat.rename(legacy)
+        (self.snapshots / "subdir").mkdir()
+        alias = str(self.snapshots / "subdir" / ".." / legacy.name)
+        self.connection.execute("UPDATE danger_threats SET snapshot_path = ?", (str(legacy),))
+        self.connection.execute("UPDATE qa_evidences SET snapshot_path = ?, frame_id = NULL WHERE snapshot_path = ?", (alias, str(threat)))
+        self.connection.commit()
+        with patch.object(self.service, "_delete_snapshot_evidences", wraps=self.service._delete_snapshot_evidences) as legacy_cleanup:
+            self.service.delete_uploaded_video("qa_cleanup")
+        legacy_cleanup.assert_called_once_with({legacy})
+        self.assertFalse(snapshot.parent.exists())
+        self.assertFalse(legacy.exists())
+        self.assert_video_data_gone()
+
+    def test_unsafe_video_ids_never_trigger_directory_deletion(self):
+        for video_id in ("", ".", "..", "../other", "foo/bar", "foo\\bar", "C:\\outside", "C:outside", "CON", "first."):
+            with self.subTest(video_id=video_id):
+                with self.assertRaises(ValueError):
+                    qa_video_snapshot_dir(video_id, qa_root=self.snapshots / "qa")
+        for video_id in ("qa_test", "first", "second", "qa_upload_abcdef123456"):
+            self.assertEqual(qa_video_snapshot_dir(video_id, qa_root=self.snapshots / "qa"), self.snapshots / "qa" / video_id)
+        self.assertFalse((self.snapshots / "qa").exists())
+
+    def test_snapshot_directory_alias_cannot_remove_another_directory(self):
+        target = self.seed_video("target", new_layout=True)
+        alias = self.snapshots / "qa" / "alias"
+        try:
+            alias.symlink_to(target[0].parent, target_is_directory=True)
+        except OSError:
+            self.skipTest("Directory symlinks unavailable on this platform")
+        with self.assertRaises(ValueError):
+            qa_video_snapshot_dir("alias", qa_root=self.snapshots / "qa")
+        self.assertTrue(target[0].exists())
+
+    def test_corrupt_video_id_preserves_upload_and_never_calls_recursive_delete(self):
+        input_path = self.uploads / "unsafe.mp4"
+        input_path.write_bytes(b"keep")
+        self.connection.execute(
+            "INSERT INTO qa_uploaded_videos (conversation_id, video_id, filename, file_path) "
+            "VALUES (?, '..', 'unsafe.mp4', ?)", (self.conversation.id, str(input_path)),
+        )
+        self.connection.commit()
+        with patch("backend.services.qa_service.shutil.rmtree") as remove:
+            with self.assertRaises(QAVideoCleanupError):
+                self.service.delete_uploaded_video("..")
+        remove.assert_not_called()
+        self.assertTrue(input_path.exists())
+        self.assertEqual(self.count("qa_uploaded_videos"), 1)
 
     def test_delete_completed_video_removes_files_and_stale_evidence(self):
         files = self.seed_video()
@@ -386,7 +614,8 @@ class QACleanupTestCase(unittest.TestCase):
         }):
             message = self.service.ask(QAAskRequest(question="What happened?", conversation_id=self.conversation.id))
         self.assertEqual(len(message.evidences), len(valid))
-        self.assertEqual([e.snapshot_path for e in message.evidences], aliases + ["", ""])
+        self.assertEqual([e.snapshot_path for e in message.evidences], [serialize_storage_path(snapshot), serialize_storage_path(threat), "", ""])
+        self.assertEqual([e.frame_id for e in message.evidences[:2]], [frame_id, frame_id])
         persisted = self.connection.execute(
             "SELECT id, snapshot_path FROM qa_evidences WHERE message_id = ? ORDER BY id", (message.id,),
         ).fetchall()
@@ -640,8 +869,9 @@ class QARoutesTestCase(unittest.TestCase):
         self.uploads = self.root / "uploads"
         self.snapshots.mkdir()
         self.uploads.mkdir()
+        self.manager = QAVideoIndexManager(qa_snapshots_dir=self.snapshots / "qa")
         self.service = QAService(
-            self.connection, api_key="", snapshots_dir=self.snapshots, uploads_dir=self.uploads
+            self.connection, api_key="", index_manager=self.manager, snapshots_dir=self.snapshots, uploads_dir=self.uploads
         )
         self.app = create_app(initialize_database=False)
         self.app.dependency_overrides[get_qa_service] = lambda: self.service

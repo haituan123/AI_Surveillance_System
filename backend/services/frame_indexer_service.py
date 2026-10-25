@@ -24,7 +24,6 @@ class FrameIndexerService:
     ) -> None:
         self.connection = connection
         self.snapshots_dir = snapshots_dir
-        self.snapshots_dir.mkdir(parents=True, exist_ok=True)
         self.attribute_extractor = AttributeExtractor()
         self.threat_detector = ThreatAndObjectDetector()
 
@@ -52,6 +51,7 @@ class FrameIndexerService:
 
         # Lưu ảnh snapshot nếu có người hoặc có threat
         if person_count > 0 or threat_events:
+            self.snapshots_dir.mkdir(parents=True, exist_ok=True)
             snapshot_filename = f"frame_{session_or_video_id}_{frame_number}_{int(timestamp_seconds*1000)}.jpg"
             full_path = self.snapshots_dir / snapshot_filename
             cv2.imwrite(str(full_path), frame_bgr)

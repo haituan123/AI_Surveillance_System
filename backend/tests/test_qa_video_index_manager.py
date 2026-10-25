@@ -12,6 +12,7 @@ import cv2
 from backend.app.database import create_schema
 from backend.app.schemas import QAAskRequest
 from backend.services.qa_service import QAService
+from backend.services.qa_snapshot_storage import qa_video_snapshot_dir
 from backend.services.qa_video_index_manager import (
     QAVideoIndexManager,
     QAVideoIndexStopTimeoutError,
@@ -72,6 +73,7 @@ class FileIndexer:
             entered.set()
             if not resume.wait(3):
                 raise RuntimeError("Test did not release indexing gate")
+        self.snapshots.mkdir(parents=True, exist_ok=True)
         path = self.snapshots / f"{session_or_video_id}_{frame_number}.jpg"
         path.write_bytes(b"snapshot")
         self.connection.execute(
@@ -109,7 +111,7 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
-    def make_manager(self, engine=None, *, frames=1000, index_gate=None, timeout=1):
+    def make_manager(self, engine=None, *, frames=1000, index_gate=None, timeout=1, qa_snapshots_dir=None):
         engine = engine or GatedEngine()
         self.engines.append(engine)
         self.addCleanup(engine.resume.set)
@@ -123,7 +125,8 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
             connection_factory=self.connection_factory,
             capture_factory=capture_factory,
             runtime_factory=lambda connection: SimpleNamespace(engine=engine),
-            indexer_factory=lambda connection: FileIndexer(connection, self.snapshots, gate=index_gate),
+            indexer_factory=lambda connection, *, snapshots_dir: FileIndexer(connection, snapshots_dir, gate=index_gate),
+            qa_snapshots_dir=qa_snapshots_dir if qa_snapshots_dir is not None else self.snapshots / "qa",
             stop_timeout_seconds=timeout,
         )
 
@@ -195,12 +198,78 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
                 self.assertNotIn(video_id, manager._jobs)
                 time.sleep(0.05)
                 self.assertEqual(self.count_frames(), 0)
-                self.assertEqual(list(self.snapshots.iterdir()), [])
+                self.assertEqual(list(self.snapshots.rglob("*.jpg")), [])
                 self.assertEqual(self.status(video_id)["status"], "processing")
                 self.assertIsNone(self.status(video_id)["completed_at"])
                 self.assertTrue(engine.reset_called)
                 self.assertTrue(self.captures[-1].released)
                 self.assertEqual(self.errors, [])
+
+    def test_two_videos_use_distinct_factory_supplied_snapshot_directories(self):
+        manager, _ = self.make_manager(GatedEngine(block_at=-1), frames=1)
+        self.start(manager, "first")
+        self.start(manager, "second")
+        deadline = time.monotonic() + 2
+        while manager._jobs and time.monotonic() < deadline:
+            time.sleep(0.005)
+        self.assertEqual(manager._jobs, {})
+        connection = self.connection_factory()
+        self.addCleanup(connection.close)
+        rows = connection.execute("SELECT session_or_video_id, frame_path FROM video_frames").fetchall()
+        self.assertEqual(len(rows), 2)
+        directories = set()
+        for row in rows:
+            directory = qa_video_snapshot_dir(row["session_or_video_id"], qa_root=self.snapshots / "qa")
+            self.assertEqual(Path(row["frame_path"]).parent, directory)
+            self.assertTrue(Path(row["frame_path"]).is_file())
+            directories.add(directory)
+        self.assertEqual(len(directories), 2)
+        self.assertEqual(list(self.snapshots.glob("*.jpg")), [])
+
+    def test_retry_joins_old_worker_and_removes_directory_before_new_indexing(self):
+        manager, engine = self.make_manager(GatedEngine(block_at=1))
+        input_path = self.start(manager)
+        self.assertTrue(engine.entered.wait(1))
+        old_job = manager._jobs["qa_test"]
+        directory = qa_video_snapshot_dir("qa_test", qa_root=self.snapshots / "qa")
+        orphan = directory / "old_only.jpg"
+        orphan.write_bytes(b"old orphan")
+        entered, resume = threading.Event(), threading.Event()
+        self.addCleanup(resume.set)
+        factory_directories = []
+
+        def replacement_indexer(connection, *, snapshots_dir):
+            self.assertFalse(directory.exists())
+            factory_directories.append(snapshots_dir)
+            return FileIndexer(connection, snapshots_dir, gate=(entered, resume))
+
+        manager.indexer_factory = replacement_indexer
+        manager.capture_factory = lambda path: FakeCapture(path, frames=1)
+        connection = self.connection_factory()
+        self.addCleanup(connection.close)
+        service = QAService(connection, index_manager=manager, snapshots_dir=self.snapshots, uploads_dir=self.uploads)
+        retry = self.run_async(lambda: service.retry_uploaded_video("qa_test"))
+        self.assertTrue(old_job.cancel_event.wait(1))
+        self.assertTrue(orphan.exists())
+        engine.resume.set()
+        self.assertTrue(entered.wait(1))
+        self.assertFalse(old_job.thread.is_alive())
+        self.assertFalse(directory.exists())
+        self.assertEqual(factory_directories, [directory])
+        self.assertEqual(self.count_frames(), 0)
+        resume.set()
+        retry.join(1)
+        deadline = time.monotonic() + 1
+        while manager._jobs and time.monotonic() < deadline:
+            time.sleep(0.005)
+        self.assertEqual(manager._jobs, {})
+        self.assertFalse(retry.is_alive())
+        self.assertEqual(self.errors, [])
+        self.assertTrue(input_path.exists())
+        self.assertTrue(directory.exists())
+        self.assertFalse(orphan.exists())
+        self.assertEqual(len(list(directory.glob("*.jpg"))), 1)
+        self.assertEqual(self.count_frames(), 1)
 
     def test_cancel_waits_for_inflight_index_write(self):
         entered, resume = threading.Event(), threading.Event()
@@ -217,7 +286,7 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
         self.assertEqual(self.count_frames(), 1)
         time.sleep(0.05)
         self.assertEqual(self.count_frames(), 1)
-        self.assertEqual(len(list(self.snapshots.iterdir())), 1)
+        self.assertEqual(len(list(self.snapshots.rglob("*.jpg"))), 1)
         self.assertEqual(self.status()["status"], "processing")
         self.assertEqual(self.errors, [])
 
@@ -300,11 +369,18 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
                 self.assertEqual(self.status(video_id)["status"], "failed" if fail else "completed")
 
     def test_delete_from_another_service_cannot_be_followed_by_new_data(self):
-        # One frame is already on disk; the next analysis is still running.
-        manager, engine = self.make_manager(GatedEngine(block_at=1))
+        # A custom-root frame is on disk; the next analysis is still running.
+        manager, engine = self.make_manager(
+            GatedEngine(block_at=1), qa_snapshots_dir=self.snapshots / "custom_qa",
+        )
         path = self.start(manager)
         self.assertTrue(engine.entered.wait(1))
         self.assertEqual(self.count_frames(), 1)
+        directory = qa_video_snapshot_dir("qa_test", qa_root=manager.qa_snapshots_dir)
+        self.assertTrue((directory / "qa_test_0.jpg").is_file())
+        orphan = directory / "orphan.jpg"
+        orphan.write_bytes(b"unreferenced snapshot")
+        self.assertFalse((self.snapshots / "qa" / "qa_test").exists())
         connection = self.connection_factory()
         self.addCleanup(connection.close)
         service = QAService(connection, index_manager=manager, snapshots_dir=self.snapshots, uploads_dir=self.uploads)
@@ -321,8 +397,11 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
         # Longer than a fake processing iteration: no worker can repopulate DB/disk.
         time.sleep(0.15)
         self.assertEqual(self.count_frames(), 0)
-        self.assertEqual(list(self.snapshots.iterdir()), [])
+        self.assertEqual(list(self.snapshots.rglob("*.jpg")), [])
         self.assertIsNone(self.status())
+        self.assertFalse(directory.exists())
+        self.assertFalse(orphan.exists())
+        self.assertFalse((self.snapshots / "qa" / "qa_test").exists())
         self.assertFalse(job.thread.is_alive())
 
     def test_delete_timeout_preserves_files_and_database(self):
@@ -337,7 +416,7 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
         self.assertTrue(path.exists())
         self.assertEqual(self.count_frames(), 1)
         self.assertIsNotNone(self.status())
-        self.assertEqual(len(list(self.snapshots.iterdir())), 1)
+        self.assertEqual(len(list(self.snapshots.rglob("*.jpg"))), 1)
         engine.resume.set()
 
     def test_conversation_delete_joins_every_active_worker_before_cleanup(self):
@@ -355,22 +434,24 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
         for job in jobs:
             self.assertTrue(job.cancel_event.wait(1))
         self.assertTrue(all(path.exists() for path in paths))
-        self.assertEqual(len(list(self.snapshots.iterdir())), 2)
+        self.assertEqual(len(list(self.snapshots.rglob("*.jpg"))), 2)
         engine.resume.set()
         delete.join(1)
         self.assertFalse(delete.is_alive())
         self.assertEqual(self.errors, [])
         time.sleep(0.05)
         self.assertEqual(self.count_frames(), 0)
-        self.assertEqual(list(self.snapshots.iterdir()), [])
+        self.assertEqual(list(self.snapshots.rglob("*.jpg")), [])
         self.assertTrue(all(not path.exists() for path in paths))
         self.assertTrue(all(not job.thread.is_alive() for job in jobs))
         self.assertEqual(connection.execute("SELECT COUNT(*) FROM qa_conversations").fetchone()[0], 0)
         self.assertIsNone(self.status("first"))
         self.assertIsNone(self.status("second"))
+        for video_id in ("first", "second"):
+            self.assertFalse(qa_video_snapshot_dir(video_id, qa_root=self.snapshots / "qa").exists())
 
     def test_ask_cannot_recreate_evidence_after_delete_during_reasoning(self):
-        manager = QAVideoIndexManager()
+        manager = QAVideoIndexManager(qa_snapshots_dir=self.snapshots / "qa")
         self.addCleanup(manager.shutdown)
         ask_connection = self.connection_factory()
         delete_connection = self.connection_factory()
@@ -387,7 +468,8 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
         for include_frame_id in (False, True):
             with self.subTest(include_frame_id=include_frame_id):
                 video_id = f"qa_ask_race_{include_frame_id}"
-                snapshot = self.snapshots / f"{video_id}.jpg"
+                snapshot = qa_video_snapshot_dir(video_id, qa_root=self.snapshots / "qa") / f"{video_id}.jpg"
+                snapshot.parent.mkdir(parents=True, exist_ok=True)
                 input_path = self.uploads / f"{video_id}.mp4"
                 snapshot.write_bytes(b"snapshot")
                 input_path.write_bytes(b"video")
@@ -437,6 +519,7 @@ class QAVideoIndexManagerTestCase(unittest.TestCase):
                 persisted = ask_service.get_conversation_detail(1)
                 self.assertTrue(all(message.evidences == [] for message in persisted.messages))
                 self.assertFalse(snapshot.exists())
+                self.assertFalse(snapshot.parent.exists())
                 self.assertEqual(delete_connection.execute("SELECT COUNT(*) FROM qa_evidences").fetchone()[0], 0)
 
 
