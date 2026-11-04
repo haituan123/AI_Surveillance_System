@@ -3,7 +3,7 @@ from collections.abc import Iterator
 
 from backend.app.config import DATABASE_PATH, ensure_runtime_directories
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 7
 
 
 def get_connection() -> sqlite3.Connection:
@@ -86,6 +86,24 @@ def _migrate_video_frames_null_camera(connection: sqlite3.Connection) -> None:
             connection.execute("PRAGMA foreign_keys = ON")
     except Exception:
         pass
+
+
+def _ensure_column(
+    connection: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    definition: str,
+) -> None:
+    columns = {
+        str(row[1])
+        for row in connection.execute(
+            f"PRAGMA table_info({table_name})"
+        ).fetchall()
+    }
+    if column_name not in columns:
+        connection.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
+        )
 
 
 def create_schema(connection: sqlite3.Connection) -> None:
@@ -313,9 +331,38 @@ def create_schema(connection: sqlite3.Connection) -> None:
             confidence REAL NOT NULL,
             snapshot_path TEXT NOT NULL,
             description_en TEXT,
+            bbox_json TEXT,
             is_resolved INTEGER NOT NULL DEFAULT 0 CHECK(is_resolved IN (0, 1)),
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(frame_id) REFERENCES video_frames(id) ON DELETE CASCADE
+        )
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS security_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_or_video_id TEXT NOT NULL,
+            camera_id INTEGER,
+            event_type TEXT NOT NULL,
+            start_timestamp REAL NOT NULL,
+            end_timestamp REAL NOT NULL,
+            confidence REAL NOT NULL,
+            primary_frame_id INTEGER,
+            snapshot_path TEXT NOT NULL DEFAULT '',
+            clip_path TEXT,
+            actor_track_ids_json TEXT NOT NULL DEFAULT '[]',
+            object_labels_json TEXT NOT NULL DEFAULT '[]',
+            bbox_json TEXT,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            model_version TEXT NOT NULL DEFAULT 'rule-v1',
+            status TEXT NOT NULL DEFAULT 'open'
+                CHECK(status IN ('open', 'closed')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(camera_id) REFERENCES cameras(id) ON DELETE SET NULL,
+            FOREIGN KEY(primary_frame_id) REFERENCES video_frames(id) ON DELETE SET NULL
         )
         """
     )
@@ -359,11 +406,19 @@ def create_schema(connection: sqlite3.Connection) -> None:
             snapshot_path TEXT NOT NULL,
             highlight_bbox_json TEXT,
             explanation_vi TEXT,
+            event_type TEXT,
+            detected_label TEXT,
+            confidence REAL,
             FOREIGN KEY(message_id) REFERENCES qa_messages(id) ON DELETE CASCADE,
             FOREIGN KEY(frame_id) REFERENCES video_frames(id) ON DELETE SET NULL
         )
         """
     )
+
+    _ensure_column(connection, "danger_threats", "bbox_json", "TEXT")
+    _ensure_column(connection, "qa_evidences", "event_type", "TEXT")
+    _ensure_column(connection, "qa_evidences", "detected_label", "TEXT")
+    _ensure_column(connection, "qa_evidences", "confidence", "REAL")
 
     connection.execute(
         """
@@ -377,7 +432,10 @@ def create_schema(connection: sqlite3.Connection) -> None:
                 'queued', 'processing', 'completed', 'failed'
             )),
             processed_frames INTEGER NOT NULL DEFAULT 0,
+            indexed_frames INTEGER NOT NULL DEFAULT 0,
             total_frames INTEGER,
+            source_fps REAL,
+            analysis_fps REAL,
             error_message TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             completed_at TEXT,
@@ -385,6 +443,14 @@ def create_schema(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    _ensure_column(
+        connection,
+        "qa_uploaded_videos",
+        "indexed_frames",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    _ensure_column(connection, "qa_uploaded_videos", "source_fps", "REAL")
+    _ensure_column(connection, "qa_uploaded_videos", "analysis_fps", "REAL")
 
     # Các index tối ưu hóa tốc độ tìm kiếm
     connection.execute(
@@ -409,6 +475,18 @@ def create_schema(connection: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_danger_threats_type
         ON danger_threats(threat_type, created_at DESC)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_security_events_video_time
+        ON security_events(session_or_video_id, start_timestamp)
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_security_events_type_time
+        ON security_events(event_type, start_timestamp DESC)
         """
     )
     connection.execute(

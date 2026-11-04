@@ -143,6 +143,10 @@ VIDEO_ANALYSIS_MAX_EVENTS = _int_setting(
     "VIDEO_ANALYSIS_MAX_EVENTS",
     0,
 )
+VIDEO_QA_ANALYSIS_FPS = _float_setting(
+    "VIDEO_QA_ANALYSIS_FPS",
+    8.0,
+)
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
 RUNTIME_DIRECTORIES = (

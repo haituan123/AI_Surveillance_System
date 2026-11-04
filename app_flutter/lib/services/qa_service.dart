@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -9,8 +10,8 @@ import 'security_service.dart';
 
 class QAService {
   QAService({http.Client? client, String? baseUrl})
-      : _client = client ?? http.Client(),
-        baseUrl = baseUrl ?? ApiConfig.baseUrl;
+    : _client = client ?? http.Client(),
+      baseUrl = baseUrl ?? ApiConfig.baseUrl;
 
   final http.Client _client;
   final String baseUrl;
@@ -106,20 +107,38 @@ class QAService {
 
   Future<QAUploadedVideoModel> uploadVideo({
     required int conversationId,
-    required String filePath,
-    String? filename,
+    String? path,
+    Stream<List<int>>? stream,
+    int? length,
+    Uint8List? bytes,
+    required String filename,
   }) async {
     final uri = _uri('/qa/conversations/$conversationId/videos');
     final request = http.MultipartRequest('POST', uri);
+    if (stream != null && length != null) {
+      request.files.add(
+        http.MultipartFile(
+          'file',
+          http.ByteStream(stream),
+          length,
+          filename: filename,
+        ),
+      );
+    } else if (bytes != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: filename),
+      );
+    } else if (path != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath('file', path, filename: filename),
+      );
+    } else {
+      throw const ApiException('Selected video data is not available.');
+    }
 
-    final file = await http.MultipartFile.fromPath(
-      'file',
-      filePath,
-      filename: filename,
-    );
-    request.files.add(file);
-
-    final streamedResponse = await request.send().timeout(const Duration(minutes: 5));
+    final streamedResponse = await _client
+        .send(request)
+        .timeout(const Duration(minutes: 5));
     final response = await http.Response.fromStream(streamedResponse);
     _ensureSuccess(response);
 
@@ -128,8 +147,12 @@ class QAService {
     );
   }
 
-  Future<List<QAUploadedVideoModel>> listUploadedVideos(int conversationId) async {
-    final response = await _get(_uri('/qa/conversations/$conversationId/videos'));
+  Future<List<QAUploadedVideoModel>> listUploadedVideos(
+    int conversationId,
+  ) async {
+    final response = await _get(
+      _uri('/qa/conversations/$conversationId/videos'),
+    );
     _ensureSuccess(response);
     final List<dynamic> list = jsonDecode(response.body) as List<dynamic>;
     return list

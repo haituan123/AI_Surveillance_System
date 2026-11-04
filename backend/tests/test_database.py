@@ -61,6 +61,7 @@ class DatabaseSchemaTestCase(unittest.TestCase):
                 "video_frames",
                 "detected_entities",
                 "danger_threats",
+                "security_events",
                 "qa_conversations",
                 "qa_messages",
                 "qa_evidences",

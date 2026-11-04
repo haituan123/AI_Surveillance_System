@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -80,13 +81,15 @@ class ThreatDetectorTestCase(unittest.TestCase):
             {"label": "hat", "confidence": 0.85, "x1": 10, "y1": 10, "x2": 40, "y2": 40},
             {"label": "pizza", "confidence": 0.92, "x1": 60, "y1": 60, "x2": 90, "y2": 90},
             {"label": "cup", "confidence": 0.78, "x1": 110, "y1": 110, "x2": 130, "y2": 130},
+            {"label": "glasses", "confidence": 0.81, "x1": 20, "y1": 15, "x2": 35, "y2": 25},
         ]
         objects, threats = detector.evaluate_detections(raw_dets)
-        self.assertEqual(len(objects), 3)
+        self.assertEqual(len(objects), 4)
         labels = [o.label for o in objects]
         self.assertIn("hat", labels)
         self.assertIn("pizza", labels)
         self.assertIn("cup", labels)
+        self.assertIn("glasses", labels)
 
 
 class FrameIndexerServiceTestCase(unittest.TestCase):
@@ -128,7 +131,9 @@ class FrameIndexerServiceTestCase(unittest.TestCase):
             ),
         )
         raw_objects = [
-            {"label": "knife", "confidence": 0.85, "x1": 20, "y1": 30, "x2": 40, "y2": 50}
+            {"label": "knife", "confidence": 0.85, "x1": 20, "y1": 30, "x2": 40, "y2": 50},
+            {"label": "backpack", "confidence": 0.90, "x1": 43, "y1": 30, "x2": 68, "y2": 75},
+            {"label": "glasses", "confidence": 0.82, "x1": 20, "y1": 15, "x2": 38, "y2": 28},
         ]
 
         frame_id = self.service.index_frame(
@@ -151,7 +156,13 @@ class FrameIndexerServiceTestCase(unittest.TestCase):
 
         # Check detected_entities
         entities = self.connection.execute("SELECT * FROM detected_entities WHERE frame_id = ?", (frame_id,)).fetchall()
-        self.assertEqual(len(entities), 2)  # 1 person + 1 knife
+        self.assertEqual(len(entities), 4)  # 1 person + 3 objects
+        person = next(row for row in entities if row["entity_type"] == "person")
+        accessories = json.loads(person["accessories_json"])
+        self.assertEqual(
+            {item["label"] for item in accessories},
+            {"backpack", "glasses"},
+        )
 
         # Check danger_threats
         threats = self.connection.execute("SELECT * FROM danger_threats WHERE frame_id = ?", (frame_id,)).fetchall()

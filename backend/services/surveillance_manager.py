@@ -225,7 +225,8 @@ class LiveSurveillanceManager:
     def status(self) -> SurveillanceStatusSnapshot:
         with self._lock:
             running = (
-                self._thread is not None
+                self._state is LiveSurveillanceState.RUNNING
+                and self._thread is not None
                 and self._thread.is_alive()
                 and not self._stop_event.is_set()
             )

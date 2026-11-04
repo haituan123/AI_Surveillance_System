@@ -18,6 +18,7 @@ class YoloByteTracker:
         self.model_path = model_path
         self.confidence = confidence
         self._model = None
+        self._object_model = None
         self._load_lock = Lock()
 
     def _get_model(self):
@@ -32,6 +33,18 @@ class YoloByteTracker:
                     ) from exc
                 self._model = YOLO(self.model_path)
             return self._model
+
+    def _get_object_model(self):
+        with self._load_lock:
+            if self._object_model is None:
+                try:
+                    from ultralytics import YOLO
+                except ImportError as exc:
+                    raise RuntimeError(
+                        "Ultralytics is required for security-object analysis."
+                    ) from exc
+                self._object_model = YOLO(self.model_path)
+            return self._object_model
 
     def track_frame(self, frame_bgr: np.ndarray) -> list[TrackedPerson]:
         if frame_bgr is None or frame_bgr.size == 0:
@@ -72,6 +85,41 @@ class YoloByteTracker:
                 confidences,
             )
         ]
+
+    def detect_objects(
+        self,
+        frame_bgr: np.ndarray,
+        *,
+        confidence: float = 0.30,
+    ) -> list[dict]:
+        """Run an all-class detection pass for security-event analysis."""
+        if frame_bgr is None or frame_bgr.size == 0:
+            return []
+
+        results = self._get_object_model().predict(
+            source=frame_bgr,
+            conf=confidence,
+            verbose=False,
+        )
+        if not results or results[0].boxes is None:
+            return []
+
+        result = results[0]
+        detections: list[dict] = []
+        for box in result.boxes:
+            class_id = int(box.cls.item())
+            coordinates = box.xyxy[0].cpu().numpy().astype(int)
+            detections.append(
+                {
+                    "label": str(result.names.get(class_id, class_id)),
+                    "confidence": float(box.conf.item()),
+                    "x1": int(coordinates[0]),
+                    "y1": int(coordinates[1]),
+                    "x2": int(coordinates[2]),
+                    "y2": int(coordinates[3]),
+                }
+            )
+        return detections
 
     def reset(self) -> None:
         if self._model is not None:

@@ -327,10 +327,18 @@ class LiveEventRecorder:
                 continue
             if track not in pending_logs:
                 pending_logs.append(track)
-            
-            # Phân biệt cảnh báo vùng cấm (Restricted Area) và Lảng vảng lâu (Loitering)
-            alert_type = AlertType.LOITERING if dwell_time >= (self.restricted_zone_dwell_seconds * 1.5) else AlertType.RESTRICTED_AREA
-            msg = f"Phát hiện người lảng vảng tại {zone.name} ({dwell_time:.1f}s)" if alert_type is AlertType.LOITERING else f"Phát hiện người trong khu vực {zone.name}"
+            alert_type = (
+                AlertType.LOITERING
+                if dwell_time >= self.restricted_zone_dwell_seconds * 1.5
+                else AlertType.RESTRICTED_AREA
+            )
+            if alert_type is AlertType.LOITERING:
+                msg = (
+                    f"Phát hiện người lảng vảng tại {zone.name} "
+                    f"({dwell_time:.1f}s)"
+                )
+            else:
+                msg = f"Unknown person entered {zone.name}"
 
             pending_alerts.append(
                 (

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
+import cv2
 import numpy as np
 
 from backend.ai.contracts import BoundingBox
@@ -49,6 +50,9 @@ SURVEILLANCE_OBJECT_CLASSES = {
     "cap": EntityType.OBJECT,
     "helmet": EntityType.OBJECT,
     "umbrella": EntityType.OBJECT,
+    "glasses": EntityType.OBJECT,
+    "eyeglasses": EntityType.OBJECT,
+    "sunglasses": EntityType.OBJECT,
     # Food & Drinks
     "food": EntityType.OBJECT,
     "bottle": EntityType.OBJECT,
@@ -158,3 +162,33 @@ class ThreatAndObjectDetector:
 
         overlap_ratio = inter_area / float(obj_area)
         return overlap_ratio > 0.40
+
+
+def annotate_threat_events(
+    frame_bgr: np.ndarray,
+    threat_events: list[ThreatEvent],
+) -> np.ndarray:
+    annotated = frame_bgr.copy()
+    for threat in threat_events:
+        box = threat.bounding_box
+        if box is None:
+            continue
+        label = f"{threat.threat_type.value} {threat.confidence:.2f}"
+        cv2.rectangle(
+            annotated,
+            (box.x1, box.y1),
+            (box.x2, box.y2),
+            (0, 0, 255),
+            3,
+        )
+        cv2.putText(
+            annotated,
+            label,
+            (box.x1, max(20, box.y1 - 10)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 255),
+            2,
+            cv2.LINE_AA,
+        )
+    return annotated

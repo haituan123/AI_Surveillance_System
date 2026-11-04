@@ -202,6 +202,9 @@ class QAEvidenceRecord:
     snapshot_path: str
     highlight_bbox_json: str | None
     explanation_vi: str | None
+    event_type: str | None
+    detected_label: str | None
+    confidence: float | None
 
 @dataclass(frozen=True)
 class QAUploadedVideoRecord:
@@ -212,7 +215,10 @@ class QAUploadedVideoRecord:
     file_path: str
     status: QAUploadedVideoStatus
     processed_frames: int
+    indexed_frames: int
     total_frames: int | None
+    source_fps: float | None
+    analysis_fps: float | None
     error_message: str | None
     created_at: str
     completed_at: str | None

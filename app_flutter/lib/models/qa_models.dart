@@ -8,6 +8,9 @@ class QAEvidenceModel {
     required this.snapshotPath,
     this.highlightBbox,
     this.explanation,
+    this.eventType,
+    this.detectedLabel,
+    this.confidence,
   });
 
   final int id;
@@ -18,6 +21,9 @@ class QAEvidenceModel {
   final String snapshotPath;
   final List<int>? highlightBbox;
   final String? explanation;
+  final String? eventType;
+  final String? detectedLabel;
+  final double? confidence;
 
   factory QAEvidenceModel.fromJson(Map<String, dynamic> json) {
     return QAEvidenceModel(
@@ -31,6 +37,9 @@ class QAEvidenceModel {
           ?.map((e) => (e as num).toInt())
           .toList(),
       explanation: json['explanation'] as String?,
+      eventType: json['event_type'] as String?,
+      detectedLabel: json['detected_label'] as String?,
+      confidence: (json['confidence'] as num?)?.toDouble(),
     );
   }
 
@@ -85,7 +94,8 @@ class QAMessageModel {
       responseVi: json['response_vi'] as String? ?? '',
       questionType: json['question_type'] as String? ?? 'general',
       createdAt: json['created_at'] as String? ?? '',
-      evidences: (json['evidences'] as List<dynamic>?)
+      evidences:
+          (json['evidences'] as List<dynamic>?)
               ?.map((e) => QAEvidenceModel.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
@@ -124,7 +134,10 @@ class QAUploadedVideoModel {
     required this.filename,
     required this.status,
     this.processedFrames = 0,
+    this.indexedFrames = 0,
     this.totalFrames = 0,
+    this.sourceFps,
+    this.analysisFps,
     this.errorMessage,
     required this.createdAt,
     this.completedAt,
@@ -136,7 +149,10 @@ class QAUploadedVideoModel {
   final String filename;
   final String status;
   final int processedFrames;
+  final int indexedFrames;
   final int totalFrames;
+  final double? sourceFps;
+  final double? analysisFps;
   final String? errorMessage;
   final String createdAt;
   final String? completedAt;
@@ -153,7 +169,10 @@ class QAUploadedVideoModel {
       filename: json['filename'] as String? ?? '',
       status: json['status'] as String? ?? 'queued',
       processedFrames: json['processed_frames'] as int? ?? 0,
+      indexedFrames: json['indexed_frames'] as int? ?? 0,
       totalFrames: json['total_frames'] as int? ?? 0,
+      sourceFps: (json['source_fps'] as num?)?.toDouble(),
+      analysisFps: (json['analysis_fps'] as num?)?.toDouble(),
       errorMessage: json['error_message'] as String?,
       createdAt: json['created_at'] as String? ?? '',
       completedAt: json['completed_at'] as String?,
@@ -177,12 +196,16 @@ class QAConversationDetailModel {
       conversation: QAConversationModel.fromJson(
         json['conversation'] as Map<String, dynamic>,
       ),
-      messages: (json['messages'] as List<dynamic>?)
+      messages:
+          (json['messages'] as List<dynamic>?)
               ?.map((e) => QAMessageModel.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
-      uploadedVideos: (json['uploaded_videos'] as List<dynamic>?)
-              ?.map((e) => QAUploadedVideoModel.fromJson(e as Map<String, dynamic>))
+      uploadedVideos:
+          (json['uploaded_videos'] as List<dynamic>?)
+              ?.map(
+                (e) => QAUploadedVideoModel.fromJson(e as Map<String, dynamic>),
+              )
               .toList() ??
           const [],
     );

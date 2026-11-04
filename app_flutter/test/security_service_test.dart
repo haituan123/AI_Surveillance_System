@@ -63,6 +63,43 @@ void main() {
     expect(results.events.single.memberName, 'Tuan');
   });
 
+  test('temporary video results parse knife evidence metadata', () async {
+    final client = MockClient(
+      (request) async => http.Response(
+        '{"job_id":"job-knife","filename":"knife.mp4","state":"completed",'
+        '"persistent":false,"summary":{"total_frames":5,'
+        '"duration_seconds":1.0,"average_processing_fps":5.0,'
+        '"known_events":0,"unknown_events":0,"threat_events":1,'
+        '"events_truncated":false},'
+        '"events":[{"event_id":"event-1","frame_index":3,'
+        '"timestamp_seconds":0.6,"track_id":null,"status":null,'
+        '"member_id":null,"member_name":null,"similarity":null,'
+        '"event_type":"knife_threat","detected_label":"knife",'
+        '"confidence":0.91,"bounding_box":[2,3,8,12],'
+        '"description":"Person detected holding a knife",'
+        '"is_threat":true,'
+        '"snapshot_url":"/video-analysis/job-knife/events/event-1/snapshot"}],'
+        '"error_message":null}',
+        200,
+      ),
+    );
+    final service = SecurityService(
+      client: client,
+      baseUrl: 'http://backend.test',
+    );
+
+    final results = await service.videoResults('job-knife');
+    final event = results.events.single;
+
+    expect(results.threatEvents, 1);
+    expect(event.isThreat, isTrue);
+    expect(event.eventType, 'knife_threat');
+    expect(event.detectedLabel, 'knife');
+    expect(event.confidence, 0.91);
+    expect(event.boundingBox, [2, 3, 8, 12]);
+    expect(event.snapshotUrl, contains('/events/event-1/snapshot'));
+  });
+
   test('latest analysis preserves backend track ids', () async {
     final client = MockClient(
       (request) async => http.Response(

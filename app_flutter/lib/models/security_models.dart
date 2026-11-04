@@ -215,26 +215,49 @@ class TemporaryVideoEventModel {
     required this.timestampSeconds,
     required this.status,
     required this.eventType,
+    this.eventId,
     this.memberName,
     this.similarity,
+    this.detectedLabel,
+    this.confidence,
+    this.boundingBox,
+    this.description,
+    this.isThreat = false,
+    this.snapshotUrl,
   });
 
   factory TemporaryVideoEventModel.fromJson(Map<String, dynamic> json) =>
       TemporaryVideoEventModel(
         frameIndex: json['frame_index'] as int,
         timestampSeconds: (json['timestamp_seconds'] as num).toDouble(),
-        status: json['status'] as String,
+        status: json['status'] as String?,
         eventType: json['event_type'] as String,
+        eventId: json['event_id'] as String?,
         memberName: json['member_name'] as String?,
         similarity: (json['similarity'] as num?)?.toDouble(),
+        detectedLabel: json['detected_label'] as String?,
+        confidence: (json['confidence'] as num?)?.toDouble(),
+        boundingBox: (json['bounding_box'] as List<dynamic>?)
+            ?.map((value) => (value as num).toInt())
+            .toList(),
+        description: json['description'] as String?,
+        isThreat: json['is_threat'] as bool? ?? false,
+        snapshotUrl: json['snapshot_url'] as String?,
       );
 
   final int frameIndex;
   final double timestampSeconds;
-  final String status;
+  final String? status;
   final String eventType;
+  final String? eventId;
   final String? memberName;
   final double? similarity;
+  final String? detectedLabel;
+  final double? confidence;
+  final List<int>? boundingBox;
+  final String? description;
+  final bool isThreat;
+  final String? snapshotUrl;
 }
 
 class VideoAnalysisResultsModel {
@@ -243,6 +266,7 @@ class VideoAnalysisResultsModel {
     required this.persistent,
     required this.knownEvents,
     required this.unknownEvents,
+    required this.threatEvents,
     required this.events,
   });
 
@@ -253,6 +277,7 @@ class VideoAnalysisResultsModel {
       persistent: json['persistent'] as bool,
       knownEvents: summary['known_events'] as int,
       unknownEvents: summary['unknown_events'] as int,
+      threatEvents: summary['threat_events'] as int? ?? 0,
       events: (json['events'] as List<dynamic>)
           .map(
             (item) =>
@@ -266,6 +291,7 @@ class VideoAnalysisResultsModel {
   final bool persistent;
   final int knownEvents;
   final int unknownEvents;
+  final int threatEvents;
   final List<TemporaryVideoEventModel> events;
 }
 
@@ -393,4 +419,3 @@ class AlertModel {
     }
   }
 }
-

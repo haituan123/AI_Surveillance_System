@@ -25,6 +25,7 @@ class FakeVideoEngine:
     def __init__(self, status=DetectionStatus.UNKNOWN):
         self.status = status
         self.reset_called = False
+        self.person_tracker = None
 
     def analyze_frame(self, frame, *, frame_index, timestamp_seconds):
         return FrameAnalysis(
@@ -182,6 +183,41 @@ class VideoAnalysisManagerTestCase(unittest.TestCase):
                 "alerts": 0,
             },
         )
+
+    def test_knife_event_exposes_temporary_evidence_snapshot(self):
+        class FakeObjectDetector:
+            @staticmethod
+            def detect_objects(frame):
+                return [
+                    {
+                        "label": "knife",
+                        "confidence": 0.91,
+                        "x1": 2,
+                        "y1": 3,
+                        "x2": 8,
+                        "y2": 12,
+                    }
+                ]
+
+        self.engine.person_tracker = FakeObjectDetector()
+        manager = self.make_manager()
+        submitted = manager.submit(self.make_input(), "knife.mp4")
+        self.wait_for_terminal(manager, submitted["job_id"])
+
+        results = manager.results(submitted["job_id"])
+        threats = [event for event in results["events"] if event["is_threat"]]
+
+        self.assertEqual(results["summary"]["threat_events"], 1)
+        self.assertEqual(len(threats), 1)
+        self.assertEqual(threats[0]["event_type"], "knife_threat")
+        self.assertEqual(threats[0]["confidence"], 0.91)
+        self.assertEqual(threats[0]["bounding_box"], [2, 3, 8, 12])
+        self.assertTrue(threats[0]["snapshot_url"])
+        snapshot = manager.event_snapshot(
+            submitted["job_id"],
+            threats[0]["event_id"],
+        )
+        self.assertTrue(snapshot.startswith(b"\xff\xd8"))
 
     def test_failed_job_deletes_input(self):
         captures = []

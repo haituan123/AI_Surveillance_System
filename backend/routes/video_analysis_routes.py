@@ -139,6 +139,25 @@ def get_video_analysis_frame(
     )
 
 
+@router.get("/{job_id}/events/{event_id}/snapshot")
+def get_video_analysis_event_snapshot(
+    job_id: str,
+    event_id: str,
+    manager: VideoAnalysisManager = Depends(get_video_analysis_manager),
+):
+    try:
+        frame = manager.event_snapshot(job_id, event_id)
+    except VideoAnalysisNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if frame is None:
+        raise HTTPException(status_code=404, detail="Event snapshot not found")
+    return Response(
+        content=frame,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.delete(
     "/{job_id}",
     response_model=VideoAnalysisDeleteResponse,

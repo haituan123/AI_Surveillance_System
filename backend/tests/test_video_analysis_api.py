@@ -92,6 +92,13 @@ class FakeVideoManager:
             raise VideoAnalysisNotFoundError("Video-analysis job not found")
         return self.frame
 
+    def event_snapshot(self, job_id, event_id):
+        if job_id == "missing":
+            raise VideoAnalysisNotFoundError("Video-analysis job not found")
+        if event_id == "missing":
+            return None
+        return self.frame
+
     def delete(self, job_id):
         if job_id == "missing":
             raise VideoAnalysisNotFoundError("Video-analysis job not found")
@@ -168,18 +175,29 @@ class VideoAnalysisApiTestCase(unittest.TestCase):
         status = self.client.get("/video-analysis/job-1/status")
         results = self.client.get("/video-analysis/job-1/results")
         frame = self.client.get("/video-analysis/job-1/frame")
+        event_frame = self.client.get(
+            "/video-analysis/job-1/events/event-1/snapshot"
+        )
         deleted = self.client.delete("/video-analysis/job-1")
 
         self.assertEqual(status.status_code, 200)
         self.assertFalse(results.json()["persistent"])
         self.assertEqual(frame.headers["content-type"], "image/jpeg")
         self.assertEqual(frame.headers["cache-control"], "no-store")
+        self.assertEqual(event_frame.status_code, 200)
+        self.assertEqual(event_frame.headers["content-type"], "image/jpeg")
         self.assertEqual(deleted.status_code, 200)
         self.assertEqual(self.video_manager.deleted_job_id, "job-1")
 
     def test_missing_job_returns_404(self):
         self.assertEqual(
             self.client.get("/video-analysis/missing/status").status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(
+                "/video-analysis/job-1/events/missing/snapshot"
+            ).status_code,
             404,
         )
         self.assertEqual(

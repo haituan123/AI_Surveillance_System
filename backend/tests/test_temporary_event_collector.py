@@ -5,7 +5,9 @@ from backend.ai.contracts import (
     FrameAnalysis,
     TrackAnalysis,
 )
+from backend.ai.threat_detector import ThreatEvent
 from backend.app.models import DetectionStatus
+from backend.app.models import ThreatType
 from backend.services.temporary_event_collector import TemporaryEventCollector
 
 
@@ -30,6 +32,38 @@ def analysis(frame_index, timestamp, status, member_id=None, track_id=1):
 
 
 class TemporaryEventCollectorTestCase(unittest.TestCase):
+    def test_knife_threat_has_confidence_bbox_and_is_deduplicated(self):
+        collector = TemporaryEventCollector(
+            member_names={},
+            unknown_confirmation_frames=99,
+            security_event_cooldown_seconds=3.0,
+        )
+        threat = ThreatEvent(
+            threat_type=ThreatType.KNIFE_THREAT,
+            confidence=0.88,
+            description_en="Person detected holding a knife",
+            bounding_box=BoundingBox(2, 3, 8, 12),
+        )
+
+        first = collector.process(
+            analysis(0, 0.0, DetectionStatus.LOW_QUALITY),
+            [threat],
+        )
+        duplicate = collector.process(
+            analysis(1, 1.0, DetectionStatus.LOW_QUALITY),
+            [threat],
+        )
+
+        self.assertEqual(len(first), 1)
+        self.assertEqual(first[0]["event_type"], "knife_threat")
+        self.assertEqual(first[0]["detected_label"], "knife")
+        self.assertEqual(first[0]["confidence"], 0.88)
+        self.assertEqual(first[0]["bounding_box"], [2, 3, 8, 12])
+        self.assertTrue(first[0]["is_threat"])
+        self.assertTrue(first[0]["event_id"])
+        self.assertEqual(duplicate, [])
+        self.assertEqual(collector.total_threat_events, 1)
+
     def test_known_event_is_deduplicated_and_named(self):
         collector = TemporaryEventCollector(
             member_names={7: "Known Member"},

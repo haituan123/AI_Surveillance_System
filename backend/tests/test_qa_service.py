@@ -8,7 +8,7 @@ from backend.app.database import create_schema
 from backend.app.schemas import QAAskRequest
 from backend.main import create_app
 from backend.routes.qa_routes import get_qa_service
-from backend.services.qa_service import QAService
+from backend.services.qa_service import QAService, calculate_video_qa_sampling
 
 
 def make_test_connection() -> sqlite3.Connection:
@@ -17,6 +17,45 @@ def make_test_connection() -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     create_schema(conn)
     return conn
+
+
+class VideoQASamplingTestCase(unittest.TestCase):
+    def test_common_source_rates_target_about_eight_fps(self):
+        expected = {
+            15.0: (2, 7.5),
+            25.0: (3, 25.0 / 3.0),
+            30.0: (4, 7.5),
+            60.0: (8, 7.5),
+        }
+
+        for source_fps, (interval, effective_fps) in expected.items():
+            with self.subTest(source_fps=source_fps):
+                safe_fps, actual_interval, actual_fps = (
+                    calculate_video_qa_sampling(source_fps, 8.0)
+                )
+                self.assertEqual(safe_fps, source_fps)
+                self.assertEqual(actual_interval, interval)
+                self.assertAlmostEqual(actual_fps, effective_fps)
+
+    def test_low_fps_video_is_not_oversampled(self):
+        source_fps, interval, effective_fps = calculate_video_qa_sampling(
+            5.0,
+            8.0,
+        )
+
+        self.assertEqual(source_fps, 5.0)
+        self.assertEqual(interval, 1)
+        self.assertEqual(effective_fps, 5.0)
+
+    def test_invalid_fps_values_use_safe_defaults(self):
+        source_fps, interval, effective_fps = calculate_video_qa_sampling(
+            float("nan"),
+            0.0,
+        )
+
+        self.assertEqual(source_fps, 25.0)
+        self.assertEqual(interval, 3)
+        self.assertAlmostEqual(effective_fps, 25.0 / 3.0)
 
 
 class QAServiceTestCase(unittest.TestCase):
@@ -46,16 +85,32 @@ class QAServiceTestCase(unittest.TestCase):
         self.connection.execute(
             """
             INSERT INTO detected_entities (
-                frame_id, entity_type, label, bbox_json, clothing_top_color, action_label
+                frame_id, entity_type, label, bbox_json, confidence,
+                clothing_top_color, clothing_bottom_color,
+                accessories_json, action_label
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 self.frame_id,
                 "person",
-                "backpack",
+                "person",
                 json.dumps([100, 200, 300, 400]),
+                0.95,
                 "black",
+                "blue",
+                json.dumps([
+                    {
+                        "label": "backpack",
+                        "confidence": 0.90,
+                        "bbox": [140, 230, 250, 390],
+                    },
+                    {
+                        "label": "glasses",
+                        "confidence": 0.84,
+                        "bbox": [155, 205, 205, 225],
+                    },
+                ]),
                 "taking_object",
             ),
         )
@@ -64,9 +119,10 @@ class QAServiceTestCase(unittest.TestCase):
         self.connection.execute(
             """
             INSERT INTO danger_threats (
-                frame_id, threat_type, confidence, snapshot_path, description_en
+                frame_id, threat_type, confidence, snapshot_path,
+                description_en, bbox_json
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 self.frame_id,
@@ -74,6 +130,7 @@ class QAServiceTestCase(unittest.TestCase):
                 0.92,
                 "snapshots/threat_knife.jpg",
                 "Person holding a knife",
+                json.dumps([50, 60, 90, 130]),
             ),
         )
         self.connection.commit()
@@ -106,6 +163,85 @@ class QAServiceTestCase(unittest.TestCase):
         self.assertEqual(msg.question_type, "threat")
         self.assertIn("nguy hiểm", msg.response_vi.lower())
         self.assertGreater(len(msg.evidences), 0)
+        self.assertEqual(msg.evidences[0].event_type, "knife_threat")
+        self.assertEqual(msg.evidences[0].detected_label, "knife")
+        self.assertAlmostEqual(msg.evidences[0].confidence, 0.92)
+        self.assertEqual(msg.evidences[0].highlight_bbox, [50, 60, 90, 130])
+
+        detail = self.service.get_conversation_detail(msg.conversation_id)
+        persisted = detail.messages[0].evidences[0]
+        self.assertEqual(persisted.event_type, "knife_threat")
+        self.assertAlmostEqual(persisted.confidence, 0.92)
+
+    def test_find_person_by_trouser_color_returns_evidence(self):
+        msg = self.service.ask(
+            QAAskRequest(question="Tìm người mặc quần màu xanh dương")
+        )
+
+        self.assertEqual(msg.question_type, "attribute")
+        self.assertIn("quần màu xanh dương", msg.response_vi.lower())
+        self.assertEqual(msg.evidences[0].event_type, "clothing_attribute")
+        self.assertEqual(msg.evidences[0].detected_label, "quần_blue")
+        self.assertAlmostEqual(msg.evidences[0].confidence, 0.95)
+        self.assertEqual(msg.evidences[0].snapshot_path, "snapshots/frame_3240.jpg")
+        self.assertAlmostEqual(msg.evidences[0].start_timestamp, 134.5)
+
+    def test_find_person_with_glasses_returns_person_snapshot(self):
+        msg = self.service.ask(
+            QAAskRequest(question="Tìm người đeo kính trong video")
+        )
+
+        self.assertEqual(msg.question_type, "attribute")
+        self.assertIn("kính", msg.response_vi.lower())
+        self.assertEqual(msg.evidences[0].event_type, "person_accessory")
+        self.assertEqual(msg.evidences[0].detected_label, "glasses")
+        self.assertAlmostEqual(msg.evidences[0].confidence, 0.84)
+        self.assertEqual(msg.evidences[0].highlight_bbox, [100, 200, 300, 400])
+        self.assertEqual(msg.evidences[0].snapshot_path, "snapshots/frame_3240.jpg")
+
+    def test_security_event_is_preferred_for_threat_qa(self):
+        self.connection.execute(
+            """
+            INSERT INTO security_events (
+                session_or_video_id, event_type, start_timestamp,
+                end_timestamp, confidence, primary_frame_id,
+                snapshot_path, object_labels_json, bbox_json,
+                status, model_version
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "video_demo_01",
+                "fire_smoke",
+                40.0,
+                46.5,
+                0.91,
+                self.frame_id,
+                "snapshots/fire_best.jpg",
+                json.dumps(["fire"]),
+                json.dumps([25, 30, 180, 240]),
+                "closed",
+                "fire-model-v1",
+            ),
+        )
+        self.connection.commit()
+
+        msg = self.service.ask(
+            QAAskRequest(
+                question="Trong video có cháy không?",
+                session_or_video_id="video_demo_01",
+            )
+        )
+
+        self.assertEqual(msg.question_type, "threat")
+        self.assertEqual(len(msg.evidences), 1)
+        evidence = msg.evidences[0]
+        self.assertEqual(evidence.event_type, "fire_smoke")
+        self.assertEqual(evidence.detected_label, "fire")
+        self.assertEqual(evidence.start_timestamp, 40.0)
+        self.assertEqual(evidence.end_timestamp, 46.5)
+        self.assertAlmostEqual(evidence.confidence, 0.91)
+        self.assertEqual(evidence.snapshot_path, "snapshots/fire_best.jpg")
 
     def test_conversation_detail_and_delete(self):
         conv = self.service.create_conversation("Kiểm tra chi tiết")
@@ -127,11 +263,24 @@ class QAServiceTestCase(unittest.TestCase):
         self.connection.execute(
             """
             INSERT INTO qa_uploaded_videos (
-                conversation_id, video_id, filename, file_path, status, total_frames, processed_frames
+                conversation_id, video_id, filename, file_path, status,
+                total_frames, processed_frames, indexed_frames,
+                source_fps, analysis_fps
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (conv.id, "qa_upload_test123", "security_clip.mp4", "temp/security_clip.mp4", "completed", 100, 100),
+            (
+                conv.id,
+                "qa_upload_test123",
+                "security_clip.mp4",
+                "temp/security_clip.mp4",
+                "completed",
+                100,
+                100,
+                27,
+                30.0,
+                7.5,
+            ),
         )
         self.connection.commit()
 
@@ -144,6 +293,9 @@ class QAServiceTestCase(unittest.TestCase):
         status = self.service.get_uploaded_video_status("qa_upload_test123")
         self.assertEqual(status.status, "completed")
         self.assertEqual(status.total_frames, 100)
+        self.assertEqual(status.indexed_frames, 27)
+        self.assertEqual(status.source_fps, 30.0)
+        self.assertEqual(status.analysis_fps, 7.5)
 
     def test_delete_uploaded_video_cascades_frames_and_entities(self):
         conv = self.service.create_conversation("Upload Delete Conv")
@@ -173,6 +325,16 @@ class QAServiceTestCase(unittest.TestCase):
             """,
             (frame_id, "person", "suspicious", json.dumps([0, 0, 10, 10])),
         )
+        self.connection.execute(
+            """
+            INSERT INTO security_events (
+                session_or_video_id, event_type, start_timestamp,
+                end_timestamp, confidence, primary_frame_id, status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (video_id, "knife_present", 10.0, 11.0, 0.9, frame_id, "closed"),
+        )
         self.connection.commit()
 
         # Delete the uploaded video
@@ -189,6 +351,11 @@ class QAServiceTestCase(unittest.TestCase):
         # Verify entity cascade deleted
         ent_row = self.connection.execute("SELECT * FROM detected_entities WHERE frame_id = ?", (frame_id,)).fetchone()
         self.assertIsNone(ent_row)
+        event_row = self.connection.execute(
+            "SELECT * FROM security_events WHERE session_or_video_id = ?",
+            (video_id,),
+        ).fetchone()
+        self.assertIsNone(event_row)
 
     def test_delete_conversation_cascades_uploaded_videos_and_frames(self):
         conv = self.service.create_conversation("Cascade Conv")

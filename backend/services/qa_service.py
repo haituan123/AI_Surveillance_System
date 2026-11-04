@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import sqlite3
 import threading
 import time
@@ -18,6 +19,7 @@ from backend.app.config import (
     GEMINI_MODEL,
     SNAPSHOTS_DIR,
     TEMP_UPLOADS_DIR,
+    VIDEO_QA_ANALYSIS_FPS,
     VIDEO_UPLOAD_MAX_BYTES,
 )
 from backend.app.database import get_connection
@@ -32,6 +34,27 @@ from backend.app.schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_SOURCE_VIDEO_FPS = 25.0
+DEFAULT_VIDEO_QA_ANALYSIS_FPS = 8.0
+
+
+def calculate_video_qa_sampling(
+    input_fps: float,
+    requested_analysis_fps: float,
+) -> tuple[float, int, float]:
+    """Return safe source FPS, frame interval, and effective analysis FPS."""
+    safe_input_fps = float(input_fps)
+    if not math.isfinite(safe_input_fps) or safe_input_fps <= 0:
+        safe_input_fps = DEFAULT_SOURCE_VIDEO_FPS
+
+    safe_requested_fps = float(requested_analysis_fps)
+    if not math.isfinite(safe_requested_fps) or safe_requested_fps <= 0:
+        safe_requested_fps = DEFAULT_VIDEO_QA_ANALYSIS_FPS
+
+    sample_interval = max(1, round(safe_input_fps / safe_requested_fps))
+    effective_analysis_fps = safe_input_fps / sample_interval
+    return safe_input_fps, sample_interval, effective_analysis_fps
 
 
 class QAService:
@@ -126,7 +149,8 @@ class QAService:
             evidence_rows = self.connection.execute(
                 """
                 SELECT id, message_id, frame_id, start_timestamp, end_timestamp,
-                       snapshot_path, highlight_bbox_json, explanation_vi
+                       snapshot_path, highlight_bbox_json, explanation_vi,
+                       event_type, detected_label, confidence
                 FROM qa_evidences
                 WHERE message_id = ?
                 ORDER BY start_timestamp ASC
@@ -144,6 +168,13 @@ class QAService:
                     snapshot_path=e["snapshot_path"],
                     highlight_bbox=json.loads(e["highlight_bbox_json"]) if e["highlight_bbox_json"] else None,
                     explanation=e["explanation_vi"],
+                    event_type=e["event_type"],
+                    detected_label=e["detected_label"],
+                    confidence=(
+                        float(e["confidence"])
+                        if e["confidence"] is not None
+                        else None
+                    ),
                 )
                 for e in evidence_rows
             ]
@@ -235,16 +266,32 @@ class QAService:
             bbox_json = json.dumps(bbox) if bbox else None
             exp_vi = ev.get("explanation_vi") or ev.get("explanation", "")
             frame_id = ev.get("frame_id")
+            event_type = ev.get("event_type")
+            detected_label = ev.get("detected_label")
+            confidence = ev.get("confidence")
+            confidence = float(confidence) if confidence is not None else None
 
             ev_cur = self.connection.execute(
                 """
                 INSERT INTO qa_evidences (
                     message_id, frame_id, start_timestamp, end_timestamp,
-                    snapshot_path, highlight_bbox_json, explanation_vi
+                    snapshot_path, highlight_bbox_json, explanation_vi,
+                    event_type, detected_label, confidence
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (message_id, frame_id, start_ts, end_ts, snapshot, bbox_json, exp_vi),
+                (
+                    message_id,
+                    frame_id,
+                    start_ts,
+                    end_ts,
+                    snapshot,
+                    bbox_json,
+                    exp_vi,
+                    event_type,
+                    detected_label,
+                    confidence,
+                ),
             )
             saved_evidences.append(
                 QAEvidence(
@@ -256,6 +303,9 @@ class QAService:
                     snapshot_path=snapshot,
                     highlight_bbox=bbox,
                     explanation=exp_vi,
+                    event_type=event_type,
+                    detected_label=detected_label,
+                    confidence=confidence,
                 )
             )
 
@@ -298,6 +348,7 @@ class QAService:
                 vf.person_count, vf.scene_caption_en,
                 de.label, de.entity_type, de.clothing_top_color, de.clothing_bottom_color,
                 de.accessories_json, de.movement_direction, de.action_label, de.bbox_json,
+                de.confidence,
                 p.name as member_name
             FROM video_frames vf
             LEFT JOIN detected_entities de ON vf.id = de.frame_id
@@ -310,7 +361,8 @@ class QAService:
 
         # Lấy danger threats
         threat_sql = f"""
-            SELECT dt.threat_type, dt.confidence, dt.snapshot_path, dt.description_en,
+            SELECT dt.frame_id, dt.threat_type, dt.confidence,
+                   dt.snapshot_path, dt.description_en, dt.bbox_json,
                    vf.timestamp_seconds
             FROM danger_threats dt
             JOIN video_frames vf ON dt.frame_id = vf.id
@@ -319,6 +371,35 @@ class QAService:
             LIMIT 50
         """
         threats = self.connection.execute(threat_sql, params).fetchall()
+
+        event_conditions = []
+        event_params: list[Any] = []
+        if camera_id is not None:
+            event_conditions.append("se.camera_id = ?")
+            event_params.append(camera_id)
+        if session_or_video_id is not None:
+            event_conditions.append("se.session_or_video_id = ?")
+            event_params.append(session_or_video_id)
+        event_where = (
+            f"WHERE {' AND '.join(event_conditions)}"
+            if event_conditions
+            else ""
+        )
+        security_events = self.connection.execute(
+            f"""
+            SELECT se.id, se.session_or_video_id, se.camera_id,
+                   se.event_type, se.start_timestamp, se.end_timestamp,
+                   se.confidence, se.primary_frame_id, se.snapshot_path,
+                   se.actor_track_ids_json, se.object_labels_json,
+                   se.bbox_json, se.metadata_json, se.model_version,
+                   se.status
+            FROM security_events se
+            {event_where}
+            ORDER BY se.start_timestamp ASC
+            LIMIT 50
+            """,
+            event_params,
+        ).fetchall()
 
         # Lấy alerts
         alerts = self.connection.execute(
@@ -334,6 +415,7 @@ class QAService:
         return {
             "entities": [dict(r) for r in entities],
             "threats": [dict(r) for r in threats],
+            "security_events": [dict(r) for r in security_events],
             "alerts": [dict(r) for r in alerts],
         }
 
@@ -357,6 +439,9 @@ TASKS:
 3. Perform step-by-step reasoning in English ("reasoning_en") based strictly on the provided CCTV evidence.
 4. Synthesize the final answer in natural, polite Vietnamese ("response_vi").
 5. Extract exact timestamps (in seconds), bounding boxes, snapshot paths, and explanations for evidence ("evidences").
+6. For clothing questions, distinguish clothing_top_color (áo) from clothing_bottom_color (quần).
+7. Only claim that a person wears or carries an accessory when that label appears in the person's accessories_json. Include the person's snapshot, timestamp, bounding box, and the accessory confidence.
+8. Prefer security_events over frame-level threats. Treat each security event as one deduplicated incident and use its start_timestamp and end_timestamp.
 
 OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, following this exact schema:
 {{
@@ -371,7 +456,10 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
       "end_timestamp": float,
       "snapshot_path": "string",
       "highlight_bbox": [x1, y1, x2, y2] or null,
-      "explanation_vi": "string"
+      "explanation_vi": "string",
+      "event_type": "string or null",
+      "detected_label": "string or null",
+      "confidence": float or null
     }}
   ]
 }}
@@ -404,15 +492,121 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
         """Local rule-based fallback when Gemini API is offline or not configured."""
         q_lower = user_question.lower()
         threats = context_data.get("threats", [])
+        security_events = context_data.get("security_events", [])
         entities = context_data.get("entities", [])
         person_entities = [
             e for e in entities
             if e.get("entity_type") == "person" or e.get("label") == "person" or e.get("clothing_top_color")
         ]
 
+        def parse_accessories(entity: dict[str, Any]) -> list[dict[str, Any]]:
+            raw = entity.get("accessories_json")
+            if not raw:
+                return []
+            try:
+                parsed = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, json.JSONDecodeError):
+                return []
+            return [item for item in parsed if isinstance(item, dict)]
+
+        def parse_bbox(entity: dict[str, Any]) -> list[int] | None:
+            raw = entity.get("bbox_json")
+            if not raw:
+                return None
+            try:
+                return json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, json.JSONDecodeError):
+                return None
+
         # 1. KIỂM TRA DAO / VŨ KHÍ / NGUY HIỂM (Threats)
-        if any(w in q_lower for w in ["dao", "vũ khí", "súng", "cháy", "nổ", "nguy hiểm", "đe dọa", "đánh nhau", "bạo lực"]):
-            matching_threat = next((t for t in threats if t["threat_type"] in ["knife_threat", "weapon_drawn", "fire_smoke", "violence"]), None)
+        if any(w in q_lower for w in ["dao", "vũ khí", "súng", "cháy", "nổ", "nguy hiểm", "đe dọa", "đánh nhau", "bạo lực", "cướp", "trộm"]):
+            requested_event_types: set[str] = set()
+            if "dao" in q_lower:
+                requested_event_types.add("knife_present")
+            if any(w in q_lower for w in ["súng", "vũ khí"]):
+                requested_event_types.update({"weapon_present", "knife_present"})
+            if any(w in q_lower for w in ["cháy", "nổ"]):
+                requested_event_types.add("fire_smoke")
+            if any(w in q_lower for w in ["đánh nhau", "bạo lực"]):
+                requested_event_types.add("violence")
+            if any(w in q_lower for w in ["cướp", "trộm"]):
+                requested_event_types.add("possible_theft")
+            matching_event = next(
+                (
+                    event
+                    for event in security_events
+                    if not requested_event_types
+                    or event.get("event_type") in requested_event_types
+                ),
+                None,
+            )
+            if matching_event:
+                start_ts = float(matching_event.get("start_timestamp", 0.0))
+                end_ts = float(matching_event.get("end_timestamp", start_ts))
+                labels_raw = matching_event.get("object_labels_json")
+                try:
+                    labels = (
+                        json.loads(labels_raw)
+                        if isinstance(labels_raw, str)
+                        else labels_raw or []
+                    )
+                except (TypeError, json.JSONDecodeError):
+                    labels = []
+                detected_label = labels[0] if labels else None
+                return {
+                    "translated_query_en": f"Find the recorded security event related to: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": (
+                        f"Found one deduplicated {matching_event['event_type']} event "
+                        f"from {start_ts:.2f}s to {end_ts:.2f}s."
+                    ),
+                    "response_vi": (
+                        f"Phát hiện sự kiện {matching_event['event_type']} từ "
+                        f"{start_ts:.2f}s đến {end_ts:.2f}s."
+                    ),
+                    "evidences": [{
+                        "frame_id": matching_event.get("primary_frame_id"),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "snapshot_path": matching_event.get("snapshot_path", ""),
+                        "highlight_bbox": parse_bbox(matching_event),
+                        "explanation_vi": (
+                            f"Sự kiện an ninh đã được xác nhận qua nhiều khung hình "
+                            f"({matching_event['event_type']})"
+                        ),
+                        "event_type": matching_event["event_type"],
+                        "detected_label": detected_label,
+                        "confidence": matching_event.get("confidence"),
+                    }],
+                }
+            requested_threat_types = {
+                {
+                    "knife_present": "knife_threat",
+                    "weapon_present": "weapon_drawn",
+                    "fire_smoke": "fire_smoke",
+                    "possible_theft": "theft",
+                    "violence": "violence",
+                }[event_type]
+                for event_type in requested_event_types
+            }
+            matching_threat = next(
+                (
+                    threat
+                    for threat in threats
+                    if threat["threat_type"]
+                    in (
+                        requested_threat_types
+                        or {
+                            "knife_threat",
+                            "weapon_drawn",
+                            "fire_smoke",
+                            "theft",
+                            "violence",
+                        }
+                    )
+                ),
+                None,
+            )
             if matching_threat:
                 ts = matching_threat.get("timestamp_seconds", 0.0)
                 return {
@@ -421,12 +615,23 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                     "reasoning_en": f"Found danger threat record ({matching_threat['threat_type']}) at timestamp {ts:.2f}s.",
                     "response_vi": f"Phát hiện cảnh báo nguy hiểm ({matching_threat['threat_type']}) tại mốc thời gian {ts:.2f}s.",
                     "evidences": [{
-                        "frame_id": None,
+                        "frame_id": matching_threat.get("frame_id"),
                         "start_timestamp": ts,
                         "end_timestamp": ts + 3.0,
                         "snapshot_path": matching_threat.get("snapshot_path", ""),
-                        "highlight_bbox": None,
+                        "highlight_bbox": (
+                            json.loads(matching_threat["bbox_json"])
+                            if matching_threat.get("bbox_json")
+                            else None
+                        ),
                         "explanation_vi": f"Đối tượng cầm vũ khí/hành vi nguy hiểm ({matching_threat['threat_type']})",
+                        "event_type": matching_threat["threat_type"],
+                        "detected_label": (
+                            "knife"
+                            if matching_threat["threat_type"] == "knife_threat"
+                            else matching_threat["threat_type"]
+                        ),
+                        "confidence": matching_threat.get("confidence"),
                     }],
                 }
             return {
@@ -472,6 +677,32 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
 
         is_asking_color = any(w in q_lower for w in ["áo", "màu", "quần", "mặc", "trang phục", "sắc"])
         if is_asking_color:
+            asks_for_trousers = any(
+                word in q_lower for word in ["quần", "pants", "trousers"]
+            )
+            asks_for_shirt = any(
+                word in q_lower for word in ["áo", "shirt", "top"]
+            )
+            if asks_for_trousers and not asks_for_shirt:
+                clothing_fields = ("clothing_bottom_color",)
+                garment_vi = "quần"
+            elif asks_for_shirt and not asks_for_trousers:
+                clothing_fields = ("clothing_top_color",)
+                garment_vi = "áo"
+            else:
+                clothing_fields = (
+                    "clothing_top_color",
+                    "clothing_bottom_color",
+                )
+                garment_vi = "trang phục"
+
+            def entity_colors(entity: dict[str, Any]) -> list[str]:
+                return [
+                    str(entity.get(field))
+                    for field in clothing_fields
+                    if entity.get(field) not in (None, "", "unknown")
+                ]
+
             target_color = None
             target_vn = None
             for kw, col in color_kw_map.items():
@@ -483,7 +714,11 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
             # Nếu người dùng chỉ nói "xanh" mà không rõ xanh lá hay xanh dương
             if not target_color and "xanh" in q_lower:
                 # Kiểm tra xem trong video có màu xanh nào
-                present_colors = {e.get("clothing_top_color") for e in person_entities}
+                present_colors = {
+                    color
+                    for entity in person_entities
+                    for color in entity_colors(entity)
+                }
                 if "blue" in present_colors:
                     target_color = "blue"
                     target_vn = "màu xanh dương"
@@ -497,7 +732,7 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
             if target_color:
                 matching = [
                     e for e in person_entities
-                    if e.get("clothing_top_color") == target_color or e.get("clothing_bottom_color") == target_color
+                    if target_color in entity_colors(e)
                 ]
                 if matching:
                     first_match = matching[0]
@@ -511,19 +746,17 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                     for idx in range(0, len(matching), sample_step):
                         ent = matching[idx]
                         ts = ent.get("timestamp_seconds", 0.0)
-                        bbox = None
-                        if ent.get("bbox_json"):
-                            try:
-                                bbox = json.loads(ent["bbox_json"])
-                            except Exception:
-                                pass
+                        bbox = parse_bbox(ent)
                         evidences.append({
                             "frame_id": ent.get("frame_id"),
                             "start_timestamp": ts,
                             "end_timestamp": ts + 2.0,
                             "snapshot_path": ent.get("frame_path", ""),
                             "highlight_bbox": bbox,
-                            "explanation_vi": f"Phát hiện {who}mặc áo {target_vn} tại mốc {ts:.2f}s",
+                            "explanation_vi": f"Phát hiện {who}mặc {garment_vi} {target_vn} tại mốc {ts:.2f}s",
+                            "event_type": "clothing_attribute",
+                            "detected_label": f"{garment_vi}_{target_color}",
+                            "confidence": ent.get("confidence"),
                         })
                         if len(evidences) >= 3:
                             break
@@ -532,22 +765,27 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                     return {
                         "translated_query_en": f"Is someone wearing {target_color} clothing: {user_question}?",
                         "question_type": QAQuestionType.ATTRIBUTE,
-                        "reasoning_en": f"Identified person {who}wearing {target_color} clothing across {len(matching)} frames ({time_desc}).",
-                        "response_vi": f"Có. Trong video ghi nhận {who}mặc áo {target_vn} xuất hiện {time_desc}.",
+                        "reasoning_en": f"Identified person {who}wearing {target_color} {garment_vi} across {len(matching)} frames ({time_desc}).",
+                        "response_vi": f"Có. Trong video ghi nhận {who}mặc {garment_vi} {target_vn} xuất hiện {time_desc}.",
                         "evidences": evidences,
                     }
                 else:
-                    present_colors = list(dict.fromkeys([
-                        e.get("clothing_top_color") for e in person_entities
-                        if e.get("clothing_top_color") and e.get("clothing_top_color") != "unknown"
-                    ]))
+                    present_colors = list(dict.fromkeys(
+                        color
+                        for entity in person_entities
+                        for color in entity_colors(entity)
+                    ))
                     present_vn = [color_vn_names.get(c, c) for c in present_colors]
-                    color_summary = f"mặc áo {', '.join(present_vn)}" if present_vn else "chưa rõ màu áo"
+                    color_summary = (
+                        f"mặc {garment_vi} {', '.join(present_vn)}"
+                        if present_vn
+                        else f"chưa rõ màu {garment_vi}"
+                    )
                     return {
                         "translated_query_en": f"Check for person wearing {target_color}: {user_question}",
                         "question_type": QAQuestionType.ATTRIBUTE,
                         "reasoning_en": f"No person found wearing {target_color}. Recorded colors in context: {present_colors}.",
-                        "response_vi": f"Không tìm thấy người nào mặc áo {target_vn} trong video. Dữ liệu video ghi nhận người xuất hiện {color_summary}.",
+                        "response_vi": f"Không tìm thấy người nào mặc {garment_vi} {target_vn} trong video. Dữ liệu video ghi nhận người xuất hiện {color_summary}.",
                         "evidences": [],
                     }
             else:
@@ -555,9 +793,8 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                 if person_entities:
                     color_groups: dict[str, list[dict[str, Any]]] = {}
                     for e in person_entities:
-                        c = e.get("clothing_top_color")
-                        if c and c != "unknown":
-                            color_groups.setdefault(c, []).append(e)
+                        for color in entity_colors(e):
+                            color_groups.setdefault(color, []).append(e)
 
                     if color_groups:
                         desc_parts = []
@@ -569,22 +806,22 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                             member = group[0].get("member_name")
                             who = f"{member} " if member else ""
                             t_desc = f"tại {min_t:.2f}s" if abs(min_t - max_t) < 0.5 else f"từ {min_t:.2f}s đến {max_t:.2f}s"
-                            desc_parts.append(f"{who}mặc áo {col_vn} ({t_desc})")
+                            desc_parts.append(
+                                f"{who}mặc {garment_vi} {col_vn} ({t_desc})"
+                            )
 
                             ent = group[0]
-                            bbox = None
-                            if ent.get("bbox_json"):
-                                try:
-                                    bbox = json.loads(ent["bbox_json"])
-                                except Exception:
-                                    pass
+                            bbox = parse_bbox(ent)
                             evidences.append({
                                 "frame_id": ent.get("frame_id"),
                                 "start_timestamp": min_t,
                                 "end_timestamp": min_t + 2.0,
                                 "snapshot_path": ent.get("frame_path", ""),
                                 "highlight_bbox": bbox,
-                                "explanation_vi": f"Người mặc áo {col_vn}",
+                                "explanation_vi": f"Người mặc {garment_vi} {col_vn}",
+                                "event_type": "clothing_attribute",
+                                "detected_label": f"{garment_vi}_{col}",
+                                "confidence": ent.get("confidence"),
                             })
 
                         return {
@@ -597,28 +834,129 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
 
         # 3. KIỂM TRA LẤY TRỘM / BALO / ĐỒ VẬT / PHỤ KIỆN (Object & Theft Reasoning)
         if any(w in q_lower for w in ["balo", "lấy", "trộm", "điện thoại", "cầm", "túi", "nón", "mũ", "khẩu trang", "kính", "ăn", "uống", "đồ ăn", "chai", "ly"]):
-            obj_entity = next((e for e in entities if e.get("action_label") in ["taking_object", "holding_weapon"] or e.get("label") in [
-                "backpack", "phone", "cell phone", "knife", "bag", "handbag", "hat", "cap", "helmet", "food", "cup", "bottle", "pizza", "sandwich"
-            ]), None)
+            requested_labels: set[str] = set()
+            accessory_queries = {
+                "balo": {"backpack"},
+                "điện thoại": {"phone", "cell phone"},
+                "túi": {"bag", "handbag", "suitcase"},
+                "nón": {"hat", "cap", "helmet"},
+                "mũ": {"hat", "cap", "helmet"},
+                "kính": {"glasses", "eyeglasses", "sunglasses"},
+                "đồ ăn": {"food", "pizza", "sandwich", "cake"},
+                "chai": {"bottle"},
+                "ly": {"cup"},
+            }
+            for keyword, labels in accessory_queries.items():
+                if keyword in q_lower:
+                    requested_labels.update(labels)
+
+            label_map = {
+                "backpack": "balo",
+                "phone": "điện thoại",
+                "cell phone": "điện thoại",
+                "knife": "dao",
+                "bag": "túi xách",
+                "handbag": "túi xách",
+                "suitcase": "va li",
+                "hat": "nón/mũ",
+                "cap": "mũ lưỡi trai",
+                "helmet": "mũ bảo hiểm",
+                "glasses": "kính",
+                "eyeglasses": "kính",
+                "sunglasses": "kính râm",
+                "food": "đồ ăn",
+                "cup": "ly nước",
+                "bottle": "chai nước",
+                "pizza": "bánh pizza",
+                "sandwich": "bánh mì",
+            }
+
+            person_accessory_match = None
+            for person in person_entities:
+                for accessory in parse_accessories(person):
+                    label = str(accessory.get("label", "")).lower()
+                    if requested_labels and label not in requested_labels:
+                        continue
+                    person_accessory_match = (person, accessory)
+                    break
+                if person_accessory_match is not None:
+                    break
+
+            if person_accessory_match is not None:
+                person, accessory = person_accessory_match
+                raw_label = str(accessory.get("label", "accessory")).lower()
+                vn_label = label_map.get(raw_label, raw_label)
+                ts = float(person.get("timestamp_seconds", 0.0))
+                member = person.get("member_name")
+                who = member or "một người"
+                top_color = person.get("clothing_top_color")
+                color_description = (
+                    f", mặc áo {color_vn_names.get(top_color, top_color)}"
+                    if top_color not in (None, "", "unknown")
+                    else ""
+                )
+                confidence = accessory.get("confidence")
+                is_object_action = any(
+                    keyword in q_lower for keyword in ["lấy", "trộm"]
+                )
+                action_vi = (
+                    f"lấy/tương tác với {vn_label}"
+                    if is_object_action
+                    else f"mang/đeo {vn_label}"
+                )
+                return {
+                    "translated_query_en": f"Find the person wearing or carrying {raw_label}: {user_question}",
+                    "question_type": (
+                        QAQuestionType.OBJECT_REASONING
+                        if is_object_action
+                        else QAQuestionType.ATTRIBUTE
+                    ),
+                    "reasoning_en": f"Associated {raw_label} with a person at {ts:.2f}s using spatial overlap.",
+                    "response_vi": f"Có. Phát hiện {who} {action_vi}{color_description} tại mốc {ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": person.get("frame_id"),
+                        "start_timestamp": ts,
+                        "end_timestamp": ts + 2.0,
+                        "snapshot_path": person.get("frame_path", ""),
+                        "highlight_bbox": parse_bbox(person),
+                        "explanation_vi": f"{who} {action_vi}",
+                        "event_type": (
+                            "object_interaction"
+                            if is_object_action
+                            else "person_accessory"
+                        ),
+                        "detected_label": raw_label,
+                        "confidence": confidence,
+                    }],
+                }
+
+            supported_object_labels = {
+                "backpack", "phone", "cell phone", "knife", "bag",
+                "handbag", "suitcase", "hat", "cap", "helmet",
+                "glasses", "eyeglasses", "sunglasses", "food", "cup",
+                "bottle", "pizza", "sandwich", "cake",
+            }
+            obj_entity = next(
+                (
+                    entity
+                    for entity in entities
+                    if (
+                        entity.get("action_label")
+                        in ["taking_object", "holding_weapon"]
+                        or (
+                            entity.get("label") in supported_object_labels
+                            and (
+                                not requested_labels
+                                or entity.get("label") in requested_labels
+                            )
+                        )
+                    )
+                ),
+                None,
+            )
             if obj_entity:
                 ts = obj_entity.get("timestamp_seconds", 0.0)
                 raw_label = str(obj_entity.get("label", "đồ vật"))
-                label_map = {
-                    "backpack": "chiếc balo",
-                    "phone": "điện thoại",
-                    "cell phone": "điện thoại",
-                    "knife": "con dao",
-                    "bag": "túi xách",
-                    "handbag": "túi xách",
-                    "hat": "nón/mũ",
-                    "cap": "mũ lưỡi trai",
-                    "helmet": "mũ bảo hiểm",
-                    "food": "đồ ăn",
-                    "cup": "ly nước",
-                    "bottle": "chai nước",
-                    "pizza": "bánh pizza",
-                    "sandwich": "bánh mì",
-                }
                 vn_label = label_map.get(raw_label.lower(), raw_label)
                 color = obj_entity.get("clothing_top_color")
                 color_vn = color_vn_names.get(color, color) if color else ""
@@ -633,8 +971,11 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                         "start_timestamp": ts,
                         "end_timestamp": ts + 4.0,
                         "snapshot_path": obj_entity.get("frame_path", ""),
-                        "highlight_bbox": json.loads(obj_entity["bbox_json"]) if obj_entity.get("bbox_json") else None,
+                        "highlight_bbox": parse_bbox(obj_entity),
                         "explanation_vi": f"Người tương tác với {vn_label}",
+                        "event_type": "object_interaction",
+                        "detected_label": raw_label,
+                        "confidence": obj_entity.get("confidence"),
                     }],
                 }
             else:
@@ -774,7 +1115,8 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
         rows = self.connection.execute(
             """
             SELECT id, conversation_id, video_id, filename, status,
-                   processed_frames, total_frames, error_message,
+                   processed_frames, indexed_frames, total_frames,
+                   source_fps, analysis_fps, error_message,
                    created_at, completed_at
             FROM qa_uploaded_videos
             WHERE conversation_id = ?
@@ -792,7 +1134,8 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
         row = self.connection.execute(
             """
             SELECT id, conversation_id, video_id, filename, status,
-                   processed_frames, total_frames, error_message,
+                   processed_frames, indexed_frames, total_frames,
+                   source_fps, analysis_fps, error_message,
                    created_at, completed_at
             FROM qa_uploaded_videos
             WHERE video_id = ?
@@ -876,6 +1219,10 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
             """,
             (video_id,),
         )
+        self.connection.execute(
+            "DELETE FROM security_events WHERE session_or_video_id = ?",
+            (video_id,),
+        )
 
         # Delete video_frames
         self.connection.execute(
@@ -913,7 +1260,9 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
         self.connection.execute(
             """
             UPDATE qa_uploaded_videos
-            SET status = ?, processed_frames = 0, error_message = NULL, completed_at = NULL
+            SET status = ?, processed_frames = 0, indexed_frames = 0,
+                source_fps = NULL, analysis_fps = NULL,
+                error_message = NULL, completed_at = NULL
             WHERE video_id = ?
             """,
             (QAUploadedVideoStatus.QUEUED, video_id),
@@ -935,6 +1284,7 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
         """Background thread: process video frames and index into DB."""
         connection = None
         capture = None
+        event_aggregator = None
         try:
             connection = get_connection()
 
@@ -949,31 +1299,45 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
             if not capture.isOpened():
                 raise RuntimeError(f"Could not open video: {file_path}")
 
-            input_fps = float(capture.get(cv2.CAP_PROP_FPS) or 25.0)
-            total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-            if total_frames > 0:
-                connection.execute(
-                    "UPDATE qa_uploaded_videos SET total_frames = ? WHERE video_id = ?",
-                    (total_frames, video_id),
+            reported_fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+            input_fps, sample_interval, effective_analysis_fps = (
+                calculate_video_qa_sampling(
+                    reported_fps,
+                    VIDEO_QA_ANALYSIS_FPS,
                 )
-                connection.commit()
+            )
+            total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            connection.execute(
+                """
+                UPDATE qa_uploaded_videos
+                SET total_frames = ?, source_fps = ?, analysis_fps = ?
+                WHERE video_id = ?
+                """,
+                (
+                    total_frames if total_frames > 0 else None,
+                    input_fps,
+                    effective_analysis_fps,
+                    video_id,
+                ),
+            )
+            connection.commit()
 
-            # Use a virtual camera_id = 0 for uploaded QA videos
-            # Sample every N frames to avoid indexing every single frame
-            sample_interval = max(1, int(input_fps))  # ~1 frame per second
+            # Analyze at the configured target rate without oversampling videos
+            # whose source FPS is lower than that target.
 
             from backend.services.frame_indexer_service import FrameIndexerService
             indexer = FrameIndexerService(connection)
 
+            from backend.services.security_event_aggregator import (
+                SecurityEventAggregator,
+            )
+            event_aggregator = SecurityEventAggregator(
+                connection,
+                session_or_video_id=video_id,
+            )
+
             from backend.services.gallery_service import build_analysis_runtime
             runtime = build_analysis_runtime(connection)
-
-            yolo_model = None
-            try:
-                if hasattr(runtime.engine, "person_tracker") and hasattr(runtime.engine.person_tracker, "_get_model"):
-                    yolo_model = runtime.engine.person_tracker._get_model()
-            except Exception:
-                pass
 
             frame_index = 0
             indexed_count = 0
@@ -993,29 +1357,17 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
 
                     # Get raw YOLO detections for threat/object detection
                     raw_detections = []
-                    if yolo_model is not None:
+                    person_tracker = getattr(runtime.engine, "person_tracker", None)
+                    if person_tracker is not None and hasattr(
+                        person_tracker,
+                        "detect_objects",
+                    ):
                         try:
-                            yolo_res = yolo_model(frame, conf=0.30, verbose=False)
-                            if yolo_res and len(yolo_res) > 0 and yolo_res[0].boxes is not None:
-                                for box in yolo_res[0].boxes:
-                                    cls_id = int(box.cls.item())
-                                    label_name = yolo_res[0].names.get(cls_id, "")
-                                    conf_val = float(box.conf.item())
-                                    coords = box.xyxy[0].cpu().numpy().astype(int)
-                                    raw_detections.append({
-                                        "label": label_name,
-                                        "confidence": conf_val,
-                                        "x1": int(coords[0]),
-                                        "y1": int(coords[1]),
-                                        "x2": int(coords[2]),
-                                        "y2": int(coords[3]),
-                                    })
+                            raw_detections = person_tracker.detect_objects(frame)
                         except Exception:
                             pass
-                    elif hasattr(runtime.engine, '_last_yolo_results'):
-                        raw_detections = runtime.engine._last_yolo_results
 
-                    indexer.index_frame(
+                    frame_id = indexer.index_frame(
                         frame,
                         camera_id=None,
                         session_or_video_id=video_id,
@@ -1024,6 +1376,11 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                         analysis=analysis,
                         raw_object_detections=raw_detections,
                     )
+                    event_aggregator.process_frame(
+                        frame_id=frame_id,
+                        timestamp_seconds=timestamp_seconds,
+                        analysis=analysis,
+                    )
                     indexed_count += 1
 
                 frame_index += 1
@@ -1031,21 +1388,29 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                 # Update progress every 30 frames
                 if frame_index % 30 == 0:
                     connection.execute(
-                        "UPDATE qa_uploaded_videos SET processed_frames = ? WHERE video_id = ?",
-                        (frame_index, video_id),
+                        """
+                        UPDATE qa_uploaded_videos
+                        SET processed_frames = ?, indexed_frames = ?
+                        WHERE video_id = ?
+                        """,
+                        (frame_index, indexed_count, video_id),
                     )
                     connection.commit()
+
+            event_aggregator.flush()
 
             # Mark completed
             connection.execute(
                 """
                 UPDATE qa_uploaded_videos
-                SET status = ?, processed_frames = ?, completed_at = ?
+                SET status = ?, processed_frames = ?, indexed_frames = ?,
+                    completed_at = ?
                 WHERE video_id = ?
                 """,
                 (
                     QAUploadedVideoStatus.COMPLETED,
                     frame_index,
+                    indexed_count,
                     datetime.now(timezone.utc).isoformat(),
                     video_id,
                 ),
@@ -1057,6 +1422,8 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
             logger.exception("Video indexing failed for %s", video_id)
             if connection:
                 try:
+                    if event_aggregator is not None:
+                        event_aggregator.flush()
                     connection.execute(
                         """
                         UPDATE qa_uploaded_videos
@@ -1091,7 +1458,18 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
             filename=row["filename"],
             status=row["status"],
             processed_frames=row["processed_frames"],
+            indexed_frames=row["indexed_frames"],
             total_frames=row["total_frames"],
+            source_fps=(
+                float(row["source_fps"])
+                if row["source_fps"] is not None
+                else None
+            ),
+            analysis_fps=(
+                float(row["analysis_fps"])
+                if row["analysis_fps"] is not None
+                else None
+            ),
             error_message=row["error_message"],
             created_at=str(row["created_at"]),
             completed_at=str(row["completed_at"]) if row["completed_at"] else None,

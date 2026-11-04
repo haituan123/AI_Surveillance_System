@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
+from uuid import uuid4
 
 from backend.ai.contracts import FrameAnalysis
+from backend.ai.threat_detector import ThreatEvent
 from backend.app.config import (
     ALERT_COOLDOWN_SECONDS,
     UNKNOWN_CONFIRMATION_FRAMES,
@@ -28,6 +30,7 @@ class TemporaryEventCollector:
         unknown_confirmation_frames: int = UNKNOWN_CONFIRMATION_FRAMES,
         unknown_cooldown_seconds: float = ALERT_COOLDOWN_SECONDS,
         max_events: int = VIDEO_ANALYSIS_MAX_EVENTS,
+        security_event_cooldown_seconds: float = 3.0,
     ) -> None:
         if unknown_confirmation_frames <= 0:
             raise ValueError("Unknown confirmation frames must be positive")
@@ -42,10 +45,12 @@ class TemporaryEventCollector:
         self.unknown_cooldown_seconds = unknown_cooldown_seconds
         self.track_state_ttl_seconds = max(unknown_cooldown_seconds, 1.0)
         self.max_events = max_events
+        self.security_event_cooldown_seconds = security_event_cooldown_seconds
         self.events: list[dict] = []
         self.known_member_ids: set[int] = set()
         self.events_truncated = False
         self._track_states: dict[int, _TemporaryTrackState] = {}
+        self._last_security_event_at: dict[str, float] = {}
 
     @property
     def total_known_events(self) -> int:
@@ -59,7 +64,15 @@ class TemporaryEventCollector:
             if event["status"] is DetectionStatus.UNKNOWN
         )
 
-    def process(self, analysis: FrameAnalysis) -> list[dict]:
+    @property
+    def total_threat_events(self) -> int:
+        return sum(1 for event in self.events if event.get("is_threat"))
+
+    def process(
+        self,
+        analysis: FrameAnalysis,
+        threat_events: list[ThreatEvent] | None = None,
+    ) -> list[dict]:
         new_events = []
         stale_track_ids = [
             track_id
@@ -122,6 +135,41 @@ class TemporaryEventCollector:
                 state.unknown_event = event
                 new_events.append(event)
 
+        for threat in threat_events or []:
+            event_type = threat.threat_type.value
+            last_event_at = self._last_security_event_at.get(event_type)
+            if (
+                last_event_at is not None
+                and analysis.timestamp_seconds - last_event_at
+                < self.security_event_cooldown_seconds
+            ):
+                continue
+            self._last_security_event_at[event_type] = analysis.timestamp_seconds
+            bbox = threat.bounding_box
+            new_events.append(
+                {
+                    "event_id": uuid4().hex,
+                    "frame_index": analysis.frame_index,
+                    "timestamp_seconds": analysis.timestamp_seconds,
+                    "track_id": None,
+                    "status": None,
+                    "member_id": None,
+                    "member_name": None,
+                    "similarity": None,
+                    "event_type": event_type,
+                    "detected_label": self._label_for_threat(threat),
+                    "confidence": threat.confidence,
+                    "bounding_box": (
+                        [bbox.x1, bbox.y1, bbox.x2, bbox.y2]
+                        if bbox is not None
+                        else None
+                    ),
+                    "description": threat.description_en,
+                    "is_threat": True,
+                    "snapshot_url": None,
+                }
+            )
+
         self.events.extend(new_events)
         if self.max_events > 0 and len(self.events) > self.max_events:
             overflow = len(self.events) - self.max_events
@@ -157,4 +205,28 @@ class TemporaryEventCollector:
             ),
             "similarity": similarity,
             "event_type": event_type,
+            "event_id": None,
+            "detected_label": None,
+            "confidence": similarity,
+            "bounding_box": None,
+            "description": None,
+            "is_threat": False,
+            "snapshot_url": None,
         }
+
+    @staticmethod
+    def _label_for_threat(threat: ThreatEvent) -> str:
+        description = threat.description_en.lower()
+        if "knife" in description:
+            return "knife"
+        if "sharp" in description:
+            return "scissors"
+        if "firearm" in description:
+            return "gun"
+        if "fire" in description:
+            return "fire"
+        if "smoke" in description:
+            return "smoke"
+        if "with " in description:
+            return description.rsplit("with ", 1)[-1]
+        return threat.threat_type.value

@@ -146,14 +146,21 @@ class VideoAnalysisStatus(BaseModel):
 
 
 class TemporaryVideoEvent(BaseModel):
+    event_id: str | None = None
     frame_index: int
     timestamp_seconds: float
-    track_id: int
-    status: DetectionStatus
+    track_id: int | None
+    status: DetectionStatus | None
     member_id: int | None
     member_name: str | None
     similarity: float | None
     event_type: str
+    detected_label: str | None = None
+    confidence: float | None = None
+    bounding_box: list[int] | None = None
+    description: str | None = None
+    is_threat: bool = False
+    snapshot_url: str | None = None
 
 
 class VideoAnalysisSummary(BaseModel):
@@ -162,6 +169,7 @@ class VideoAnalysisSummary(BaseModel):
     average_processing_fps: float
     known_events: int
     unknown_events: int
+    threat_events: int = 0
     events_truncated: bool
 
 
@@ -304,6 +312,9 @@ class QAEvidence(BaseModel):
     snapshot_path: str
     highlight_bbox: list[int] | None = None
     explanation: str | None = None
+    event_type: str | None = None
+    detected_label: str | None = None
+    confidence: float | None = None
 
 
 class QAMessage(BaseModel):
@@ -331,7 +342,10 @@ class QAUploadedVideo(BaseModel):
     filename: str
     status: str
     processed_frames: int = 0
+    indexed_frames: int = 0
     total_frames: int | None = None
+    source_fps: float | None = None
+    analysis_fps: float | None = None
     error_message: str | None = None
     created_at: str
     completed_at: str | None = None

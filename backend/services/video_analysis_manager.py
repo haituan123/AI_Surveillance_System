@@ -11,6 +11,10 @@ from uuid import uuid4
 import cv2
 
 from backend.ai.analysis_engine import annotate_frame
+from backend.ai.threat_detector import (
+    ThreatAndObjectDetector,
+    annotate_threat_events,
+)
 from backend.app.config import (
     VIDEO_ANALYSIS_RESULT_TTL_SECONDS,
     VIDEO_ANALYSIS_STOP_TIMEOUT_SECONDS,
@@ -59,9 +63,11 @@ class _VideoJob:
     duration_seconds: float = 0.0
     known_events: int = 0
     unknown_events: int = 0
+    threat_events: int = 0
     events_truncated: bool = False
     events: list[dict] = field(default_factory=list)
     latest_frame_jpeg: bytes | None = None
+    event_snapshots: dict[str, bytes] = field(default_factory=dict)
     cancel_event: threading.Event = field(default_factory=threading.Event)
     thread: threading.Thread | None = None
     completed_monotonic: float | None = None
@@ -132,6 +138,7 @@ class VideoAnalysisManager:
                     "average_processing_fps": job.processing_fps,
                     "known_events": job.known_events,
                     "unknown_events": job.unknown_events,
+                    "threat_events": job.threat_events,
                     "events_truncated": job.events_truncated,
                 },
                 "events": list(job.events),
@@ -142,6 +149,12 @@ class VideoAnalysisManager:
         self.cleanup_expired()
         with self._lock:
             return self._get_job(job_id).latest_frame_jpeg
+
+    def event_snapshot(self, job_id: str, event_id: str) -> bytes | None:
+        self.cleanup_expired()
+        with self._lock:
+            job = self._get_job(job_id)
+            return job.event_snapshots.get(event_id)
 
     def delete(self, job_id: str) -> None:
         with self._lock:
@@ -211,6 +224,8 @@ class VideoAnalysisManager:
             collector = TemporaryEventCollector(
                 member_names=runtime.member_names
             )
+            threat_detector = ThreatAndObjectDetector()
+            object_detection_available = True
             capture = self.capture_factory(str(job.input_path))
             if not capture.isOpened():
                 raise RuntimeError("Could not open uploaded video")
@@ -255,12 +270,34 @@ class VideoAnalysisManager:
                     frame_index=frame_index,
                     timestamp_seconds=timestamp_seconds,
                 )
-                collector.process(analysis)
+                raw_detections = []
+                person_tracker = getattr(runtime.engine, "person_tracker", None)
+                if (
+                    object_detection_available
+                    and person_tracker is not None
+                    and hasattr(person_tracker, "detect_objects")
+                ):
+                    try:
+                        raw_detections = person_tracker.detect_objects(frame)
+                    except Exception as exc:
+                        object_detection_available = False
+                        logger.warning(
+                            "Security-object detection is unavailable: %s",
+                            exc,
+                        )
+                _, threat_events = threat_detector.evaluate_detections(
+                    raw_detections,
+                    person_boxes=[
+                        track.bounding_box for track in analysis.tracks
+                    ],
+                )
+                new_events = collector.process(analysis, threat_events)
                 annotated = annotate_frame(
                     frame,
                     analysis,
                     member_names=runtime.member_names,
                 )
+                annotated = annotate_threat_events(annotated, threat_events)
                 encoded, buffer = cv2.imencode(".jpg", annotated)
                 if not encoded:
                     raise RuntimeError(
@@ -270,6 +307,15 @@ class VideoAnalysisManager:
                 frame_index += 1
                 elapsed = max(time.perf_counter() - started, 1e-9)
                 with self._lock:
+                    encoded_bytes = buffer.tobytes()
+                    for event in new_events:
+                        event_id = event.get("event_id")
+                        if event.get("is_threat") and event_id:
+                            event["snapshot_url"] = (
+                                f"/video-analysis/{job_id}/events/"
+                                f"{event_id}/snapshot"
+                            )
+                            job.event_snapshots[event_id] = encoded_bytes
                     job.processed_frames = frame_index
                     job.processing_fps = frame_index / elapsed
                     job.progress = (
@@ -277,10 +323,11 @@ class VideoAnalysisManager:
                         if job.total_frames
                         else None
                     )
-                    job.latest_frame_jpeg = buffer.tobytes()
+                    job.latest_frame_jpeg = encoded_bytes
                     job.events = list(collector.events)
                     job.known_events = collector.total_known_events
                     job.unknown_events = collector.total_unknown_events
+                    job.threat_events = collector.total_threat_events
                     job.events_truncated = collector.events_truncated
 
             if frame_index == 0 and not job.cancel_event.is_set():

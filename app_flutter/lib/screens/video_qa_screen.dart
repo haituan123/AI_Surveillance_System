@@ -64,15 +64,18 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
     final hasProcessing = _uploadedVideos.any((v) => v.isProcessing);
     if (hasProcessing) {
       _pollTimer = Timer.periodic(
-          const Duration(seconds: 3), (_) => _pollVideoStatuses());
+        const Duration(seconds: 3),
+        (_) => _pollVideoStatuses(),
+      );
     }
   }
 
   Future<void> _pollVideoStatuses() async {
     if (_selectedConversation == null) return;
     try {
-      final videos =
-          await _qaService.listUploadedVideos(_selectedConversation!.id);
+      final videos = await _qaService.listUploadedVideos(
+        _selectedConversation!.id,
+      );
       if (!mounted) return;
       setState(() {
         _uploadedVideos = videos;
@@ -151,10 +154,13 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       builder: (ctx) => AlertDialog(
         title: Text('Xác nhận xóa phiên hỏi đáp'),
         content: Text(
-            'Xóa phiên hỏi đáp này sẽ đồng thời xóa toàn bộ tin nhắn, video đã tải lên và dữ liệu AI đã phân tích của phiên.'),
+          'Xóa phiên hỏi đáp này sẽ đồng thời xóa toàn bộ tin nhắn, video đã tải lên và dữ liệu AI đã phân tích của phiên.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: Text('Hủy')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Hủy'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () => Navigator.pop(ctx, true),
@@ -171,8 +177,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       setState(() {
         _conversations.removeWhere((c) => c.id == id);
         if (_selectedConversation?.id == id) {
-          _selectedConversation =
-              _conversations.isNotEmpty ? _conversations.first : null;
+          _selectedConversation = _conversations.isNotEmpty
+              ? _conversations.first
+              : null;
           if (_selectedConversation != null) {
             _selectConversation(_selectedConversation!);
           } else {
@@ -201,16 +208,17 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['mp4', 'avi', 'mov', 'mkv', 'webm'],
+        withReadStream: true,
       );
 
-      if (result == null ||
-          result.files.isEmpty ||
-          result.files.single.path == null) {
+      final file = result?.files.single;
+      if (file == null) return;
+      if (file.readStream == null && file.bytes == null && file.path == null) {
+        setState(() {
+          _errorMessage = 'Dữ liệu video đã chọn không khả dụng.';
+        });
         return;
       }
-
-      final filePath = result.files.single.path!;
-      final filename = result.files.single.name;
 
       setState(() {
         _uploadingVideo = true;
@@ -219,8 +227,11 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
 
       final uploaded = await _qaService.uploadVideo(
         conversationId: _selectedConversation!.id,
-        filePath: filePath,
-        filename: filename,
+        path: file.path,
+        stream: file.readStream,
+        length: file.size,
+        bytes: file.bytes,
+        filename: file.name,
       );
 
       setState(() {
@@ -230,7 +241,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       });
 
       _showSnackBar(
-          'Đã tải video lên. AI đang bắt đầu xử lý và lập chỉ mục frames...');
+        'Đã tải video lên. AI đang bắt đầu xử lý và lập chỉ mục frames...',
+      );
       _checkAndStartPolling();
     } catch (e) {
       setState(() {
@@ -247,10 +259,13 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       builder: (ctx) => AlertDialog(
         title: Text('Xác nhận xóa video'),
         content: Text(
-            'Bạn có chắc muốn xóa video "${video.filename}"?\nToàn bộ dữ liệu khung hình và AI nhận dạng liên quan đến video này sẽ được xóa khỏi cơ sở dữ liệu.'),
+          'Bạn có chắc muốn xóa video "${video.filename}"?\nToàn bộ dữ liệu khung hình và AI nhận dạng liên quan đến video này sẽ được xóa khỏi cơ sở dữ liệu.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: Text('Hủy')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Hủy'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () => Navigator.pop(ctx, true),
@@ -271,7 +286,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         }
       });
       _showSnackBar(
-          'Đã xóa video "${video.filename}" và các dữ liệu liên quan');
+        'Đã xóa video "${video.filename}" và các dữ liệu liên quan',
+      );
     } catch (e) {
       _showSnackBar('Lỗi xóa video: $e');
     }
@@ -281,8 +297,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
     try {
       final updated = await _qaService.retryVideo(video.videoId);
       setState(() {
-        final idx =
-            _uploadedVideos.indexWhere((v) => v.videoId == video.videoId);
+        final idx = _uploadedVideos.indexWhere(
+          (v) => v.videoId == video.videoId,
+        );
         if (idx != -1) {
           _uploadedVideos[idx] = updated;
         }
@@ -503,8 +520,10 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.teal,
                     side: BorderSide(color: AppColors.teal),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
@@ -552,6 +571,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
 
   Widget _buildUploadedVideoChip(QAUploadedVideoModel video) {
     final isSelected = _selectedScope == video.videoId;
+    final analysisRate = video.analysisFps == null
+        ? ''
+        : ' @ ${video.analysisFps!.toStringAsFixed(1)} FPS';
     Widget statusIcon;
     String tooltipStatus;
 
@@ -565,11 +587,12 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         ),
       );
       tooltipStatus = video.totalFrames > 0
-          ? 'Đang phân tích: ${video.processedFrames}/${video.totalFrames} frames'
+          ? 'Đã đọc ${video.processedFrames}/${video.totalFrames} frames; AI đã phân tích ${video.indexedFrames}$analysisRate'
           : 'Đang chuẩn bị xử lý...';
     } else if (video.isCompleted) {
       statusIcon = Icon(Icons.check_circle, size: 14, color: AppColors.success);
-      tooltipStatus = 'Đã hoàn tất phân tích (${video.processedFrames} frames)';
+      tooltipStatus =
+          'Đã đọc ${video.processedFrames} frames; AI đã phân tích ${video.indexedFrames}$analysisRate';
     } else {
       statusIcon = Icon(Icons.error, size: 14, color: AppColors.danger);
       tooltipStatus =
@@ -607,7 +630,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
               builder: (ctx) => AlertDialog(
                 title: Text('Video bị lỗi khi xử lý'),
                 content: Text(
-                    'Lỗi: ${video.errorMessage ?? "Không xác định"}\n\nBạn có muốn thử phân tích lại video này không?'),
+                  'Lỗi: ${video.errorMessage ?? "Không xác định"}\n\nBạn có muốn thử phân tích lại video này không?',
+                ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
@@ -629,8 +653,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         },
         deleteIcon: Icon(Icons.close, size: 14),
         onDeleted: () => _deleteUploadedVideo(video),
-        deleteButtonTooltipMessage:
-            context.tr('Xóa video và dữ liệu liên quan'),
+        deleteButtonTooltipMessage: context.tr(
+          'Xóa video và dữ liệu liên quan',
+        ),
       ),
     );
   }
@@ -638,9 +663,13 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
   Widget _buildScopeChip(String value, String label) {
     final isSelected = _selectedScope == value;
     return ChoiceChip(
-      label: Text(label,
-          style: TextStyle(
-              fontSize: 11, color: isSelected ? Colors.white : AppColors.text)),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: isSelected ? Colors.white : AppColors.text,
+        ),
+      ),
       selected: isSelected,
       selectedColor: AppColors.teal,
       backgroundColor: AppColors.surface,
@@ -679,9 +708,10 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         Expanded(
           child: _conversations.isEmpty
               ? Center(
-                  child: Text('Chưa có phiên hỏi đáp nào',
-                      style:
-                          TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                  child: Text(
+                    'Chưa có phiên hỏi đáp nào',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
                 )
               : ListView.builder(
                   itemCount: _conversations.length,
@@ -689,15 +719,17 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                     final conv = _conversations[index];
                     final isSelected = conv.id == _selectedConversation?.id;
                     return Container(
-                      color:
-                          isSelected ? AppColors.tealSoft : Colors.transparent,
+                      color: isSelected
+                          ? AppColors.tealSoft
+                          : Colors.transparent,
                       child: ListTile(
                         dense: true,
                         leading: Icon(
                           Icons.chat_bubble_outline,
                           size: 18,
-                          color:
-                              isSelected ? AppColors.teal : AppColors.textMuted,
+                          color: isSelected
+                              ? AppColors.teal
+                              : AppColors.textMuted,
                         ),
                         title: Text(
                           conv.title,
@@ -716,11 +748,16 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                         subtitle: Text(
                           '${conv.messageCount} tin nhắn',
                           style: TextStyle(
-                              fontSize: 11, color: AppColors.textSubtle),
+                            fontSize: 11,
+                            color: AppColors.textSubtle,
+                          ),
                         ),
                         trailing: IconButton(
-                          icon: Icon(Icons.delete_outline,
-                              size: 16, color: AppColors.textSubtle),
+                          icon: Icon(
+                            Icons.delete_outline,
+                            size: 16,
+                            color: AppColors.textSubtle,
+                          ),
                           onPressed: () => _deleteConversation(conv.id),
                           tooltip: context.tr('Xóa phiên này'),
                         ),
@@ -744,15 +781,19 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.video_library_outlined,
-                size: 56, color: AppColors.teal.withAlpha(90)),
+            Icon(
+              Icons.video_library_outlined,
+              size: 56,
+              color: AppColors.teal.withAlpha(90),
+            ),
             const SizedBox(height: 16),
             Text(
               'Bắt đầu đặt câu hỏi về dữ liệu camera giám sát',
               style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -789,9 +830,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: AppColors.teal,
-                borderRadius: BorderRadius.circular(AppRadii.md).copyWith(
-                  bottomRight: Radius.zero,
-                ),
+                borderRadius: BorderRadius.circular(
+                  AppRadii.md,
+                ).copyWith(bottomRight: Radius.zero),
               ),
               child: Text(
                 msg.userQueryVi,
@@ -827,7 +868,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: _getTypeColor(msg.questionType).withAlpha(35),
                           borderRadius: BorderRadius.circular(AppRadii.sm),
@@ -845,7 +888,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                       Text(
                         msg.createdAt,
                         style: TextStyle(
-                            fontSize: 11, color: AppColors.textSubtle),
+                          fontSize: 11,
+                          color: AppColors.textSubtle,
+                        ),
                       ),
                     ],
                   ),
@@ -867,21 +912,26 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                       msg.reasoningEn!.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Theme(
-                      data: Theme.of(context)
-                          .copyWith(dividerColor: Colors.transparent),
+                      data: Theme.of(
+                        context,
+                      ).copyWith(dividerColor: Colors.transparent),
                       child: ExpansionTile(
                         tilePadding: EdgeInsets.zero,
                         title: Row(
                           children: [
-                            Icon(Icons.translate,
-                                size: 14, color: AppColors.teal),
+                            Icon(
+                              Icons.translate,
+                              size: 14,
+                              color: AppColors.teal,
+                            ),
                             SizedBox(width: 6),
                             Text(
                               'Bản dịch & Suy luận AI (Reasoning EN)',
                               style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.teal),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.teal,
+                              ),
                             ),
                           ],
                         ),
@@ -896,15 +946,21 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Query EN: "${msg.translatedQueryEn}"',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        fontStyle: FontStyle.italic)),
+                                Text(
+                                  'Query EN: "${msg.translatedQueryEn}"',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
-                                Text('Reasoning: ${msg.reasoningEn}',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textMuted)),
+                                Text(
+                                  'Reasoning: ${msg.reasoningEn}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -919,9 +975,10 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                     Text(
                       'Bằng chứng xác thực (Evidence Clips & Timestamps):',
                       style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textMuted),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textMuted,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -943,8 +1000,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
 
   Widget _buildEvidenceCard(QAEvidenceModel ev) {
     final hasImage = ev.snapshotPath.isNotEmpty;
-    final imageUrl =
-        hasImage ? '${ApiConfig.baseUrl}/qa/evidences/${ev.id}/snapshot' : '';
+    final imageUrl = hasImage
+        ? '${ApiConfig.baseUrl}/qa/evidences/${ev.id}/snapshot'
+        : '';
 
     return Container(
       width: 220,
@@ -972,9 +1030,10 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                 Text(
                   'Mốc: ${ev.formattedTimeRange}',
                   style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold),
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
@@ -994,14 +1053,16 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                       height: 110,
                       color: Colors.grey.shade300,
                       child: Center(
-                          child: Icon(Icons.broken_image, color: Colors.grey)),
+                        child: Icon(Icons.broken_image, color: Colors.grey),
+                      ),
                     ),
                   )
                 : Container(
                     height: 110,
                     color: Colors.grey.shade200,
-                    child:
-                        Center(child: Icon(Icons.videocam, color: Colors.grey)),
+                    child: Center(
+                      child: Icon(Icons.videocam, color: Colors.grey),
+                    ),
                   ),
           ),
           if (ev.explanation != null && ev.explanation!.isNotEmpty) ...[
@@ -1011,6 +1072,39 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+            ),
+          ],
+          if (ev.eventType != null || ev.confidence != null) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                if (ev.eventType != null)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      ev.eventType!.replaceAll('_', ' '),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                if (ev.detectedLabel != null)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      ev.detectedLabel!.replaceAll('_', ' '),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                if (ev.confidence != null)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      'Confidence ${(ev.confidence! * 100).toStringAsFixed(1)}%',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+              ],
             ),
           ],
         ],
@@ -1032,12 +1126,15 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
               controller: _questionController,
               decoration: InputDecoration(
                 hintText: context.tr(
-                    'Nhập câu hỏi bằng tiếng Việt về video camera (VD: Có ai lấy balo không?)...'),
+                  'Nhập câu hỏi bằng tiếng Việt về video camera (VD: Có ai lấy balo không?)...',
+                ),
                 hintStyle: TextStyle(fontSize: 13, color: AppColors.textSubtle),
                 filled: true,
                 fillColor: AppColors.surfaceSubtle,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadii.md),
                   borderSide: BorderSide(color: AppColors.border),
@@ -1073,7 +1170,10 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                   : Icon(Icons.send_rounded, size: 20),
             ),
           ),
