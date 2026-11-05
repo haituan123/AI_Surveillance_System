@@ -1,28 +1,24 @@
 import json
 import logging
 import math
+import shutil
 import sqlite3
-import threading
-import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import cv2
-
 from backend.app.config import (
-    ALLOWED_VIDEO_EXTENSIONS,
     GEMINI_API_KEY,
     GEMINI_MODEL,
     SNAPSHOTS_DIR,
     TEMP_UPLOADS_DIR,
     VIDEO_QA_ANALYSIS_FPS,
     VIDEO_UPLOAD_MAX_BYTES,
+    resolve_storage_path,
+    serialize_storage_path,
 )
-from backend.app.database import get_connection
 from backend.app.models import QAQuestionType, QAUploadedVideoStatus
 from backend.app.schemas import (
     QAAskRequest,
@@ -32,6 +28,11 @@ from backend.app.schemas import (
     QAMessage,
     QAUploadedVideo,
 )
+from backend.services.qa_video_index_manager import (
+    QAVideoIndexManager,
+    qa_video_index_manager,
+)
+from backend.services.qa_snapshot_storage import qa_video_snapshot_dir
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,10 @@ def calculate_video_qa_sampling(
     return safe_input_fps, sample_interval, effective_analysis_fps
 
 
+class QAVideoCleanupError(RuntimeError):
+    """Required Q&A filesystem cleanup failed; DB metadata is retained."""
+
+
 class QAService:
     """Service handling multi-lingual Video Surveillance Question Answering with Gemini reasoning."""
 
@@ -66,10 +71,27 @@ class QAService:
         *,
         api_key: str = GEMINI_API_KEY,
         model_name: str = GEMINI_MODEL,
+        index_manager: QAVideoIndexManager = qa_video_index_manager,
+        snapshots_dir: Path = SNAPSHOTS_DIR,
+        uploads_dir: Path = TEMP_UPLOADS_DIR,
     ) -> None:
         self.connection = connection
         self.api_key = api_key
         self.model_name = model_name
+        self.index_manager = index_manager
+        try:
+            self.snapshots_dir = Path(snapshots_dir).resolve()
+            qa_root = Path(index_manager.qa_snapshots_dir)
+            # Resolving must not hide an alias that the shared ownership helper
+            # would reject when the manager uses the original configured path.
+            if qa_root.is_symlink() or getattr(qa_root, "is_junction", lambda: False)():
+                raise ValueError("Q&A snapshot root cannot be a filesystem alias")
+            self.qa_snapshots_dir = qa_root.resolve()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValueError("Invalid Q&A snapshot root configuration") from exc
+        if self.qa_snapshots_dir == self.snapshots_dir or not self.qa_snapshots_dir.is_relative_to(self.snapshots_dir):
+            raise ValueError("Manager Q&A snapshot root must be strictly inside snapshots_dir")
+        self.uploads_dir = Path(uploads_dir)
 
     def create_conversation(self, title: str = "Phiên hỏi đáp an ninh") -> QAConversation:
         cursor = self.connection.execute(
@@ -202,20 +224,19 @@ class QAService:
         )
 
     def delete_conversation(self, conversation_id: int) -> None:
-        # First clean up uploaded video data (video_frames, snapshots, files)
-        video_rows = self.connection.execute(
-            "SELECT video_id, file_path FROM qa_uploaded_videos WHERE conversation_id = ?",
-            (conversation_id,),
-        ).fetchall()
-        for vrow in video_rows:
-            self._cleanup_uploaded_video_data(vrow["video_id"], vrow["file_path"])
-
-        # CASCADE will delete qa_messages, qa_evidences, qa_uploaded_videos
-        self.connection.execute(
-            "DELETE FROM qa_conversations WHERE id = ?",
-            (conversation_id,),
-        )
-        self.connection.commit()
+        with self.index_manager.lifecycle_lock:
+            video_rows = self.connection.execute(
+                "SELECT video_id, file_path FROM qa_uploaded_videos WHERE conversation_id = ?",
+                (conversation_id,),
+            ).fetchall()
+            # Signal ALL jobs before joining any; do not clean one video's files
+            # while another worker from this conversation can still write.
+            self.index_manager.cancel_many(row["video_id"] for row in video_rows)
+            with self.connection:
+                self._cleanup_uploaded_videos(video_rows)
+                self.connection.execute(
+                    "DELETE FROM qa_conversations WHERE id = ?", (conversation_id,)
+                )
 
     def ask(self, request: QAAskRequest) -> QAMessage:
         """Process a Vietnamese query: translate to English, retrieve DB context, reason with Gemini, respond in Vietnamese."""
@@ -236,80 +257,86 @@ class QAService:
             context_data=context_data,
         )
 
-        # 3. Lưu vào Database
-        cursor = self.connection.execute(
-            """
-            INSERT INTO qa_messages (
-                conversation_id, user_query_vi, translated_query_en,
-                reasoning_en, response_vi, question_type
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                conv_id,
-                request.question,
-                qa_result.get("translated_query_en", ""),
-                qa_result.get("reasoning_en", ""),
-                qa_result.get("response_vi", ""),
-                qa_result.get("question_type", QAQuestionType.GENERAL),
-            ),
-        )
-        message_id = int(cursor.lastrowid)
+        returned_evidences = qa_result.get("evidences", [])
+        provenance, threat_ids_by_path = self._context_snapshot_provenance(context_data) if returned_evidences else ({}, {})
 
-        # 4. Lưu Evidences
-        saved_evidences: list[QAEvidence] = []
-        for ev in qa_result.get("evidences", []):
-            start_ts = float(ev.get("start_timestamp", 0.0))
-            end_ts = float(ev.get("end_timestamp", start_ts))
-            snapshot = ev.get("snapshot_path", "")
-            bbox = ev.get("highlight_bbox")
-            bbox_json = json.dumps(bbox) if bbox else None
-            exp_vi = ev.get("explanation_vi") or ev.get("explanation", "")
-            frame_id = ev.get("frame_id")
-            event_type = ev.get("event_type")
-            detected_label = ev.get("detected_label")
-            confidence = ev.get("confidence")
-            confidence = float(confidence) if confidence is not None else None
-
-            ev_cur = self.connection.execute(
+        # Reasoning stays outside the lifecycle lock. Only final persistence is
+        # serialized with deletion, and all inserts commit or roll back together.
+        with self.index_manager.lifecycle_lock, self.connection:
+            # 3. Lưu vào Database
+            cursor = self.connection.execute(
                 """
-                INSERT INTO qa_evidences (
-                    message_id, frame_id, start_timestamp, end_timestamp,
-                    snapshot_path, highlight_bbox_json, explanation_vi,
-                    event_type, detected_label, confidence
+                INSERT INTO qa_messages (
+                    conversation_id, user_query_vi, translated_query_en,
+                    reasoning_en, response_vi, question_type
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    message_id,
-                    frame_id,
-                    start_ts,
-                    end_ts,
-                    snapshot,
-                    bbox_json,
-                    exp_vi,
-                    event_type,
-                    detected_label,
-                    confidence,
+                    conv_id,
+                    request.question,
+                    qa_result.get("translated_query_en", ""),
+                    qa_result.get("reasoning_en", ""),
+                    qa_result.get("response_vi", ""),
+                    qa_result.get("question_type", QAQuestionType.GENERAL),
                 ),
             )
-            saved_evidences.append(
-                QAEvidence(
-                    id=int(ev_cur.lastrowid),
-                    message_id=message_id,
-                    frame_id=frame_id,
-                    start_timestamp=start_ts,
-                    end_timestamp=end_ts,
-                    snapshot_path=snapshot,
-                    highlight_bbox=bbox,
-                    explanation=exp_vi,
-                    event_type=event_type,
-                    detected_label=detected_label,
-                    confidence=confidence,
-                )
-            )
+            
+            message_id = int(cursor.lastrowid)
 
-        self.connection.commit()
+            # 4. Lưu Evidences
+            saved_evidences: list[QAEvidence] = []
+            for ev in self._revalidate_evidences(returned_evidences, provenance, threat_ids_by_path, request):
+                start_ts = float(ev.get("start_timestamp", 0.0))
+                end_ts = float(ev.get("end_timestamp", start_ts))
+                snapshot = ev.get("snapshot_path") or ""
+                bbox = ev.get("highlight_bbox")
+                bbox_json = json.dumps(bbox) if bbox else None
+                exp_vi = ev.get("explanation_vi") or ev.get("explanation", "")
+                frame_id = ev.get("frame_id")
+
+                event_type = ev.get("event_type")
+                detected_label = ev.get("detected_label")
+                confidence = ev.get("confidence")
+                confidence = float(confidence) if confidence is not None else None
+
+                ev_cur = self.connection.execute(
+                    """
+                    INSERT INTO qa_evidences (
+                        message_id, frame_id, start_timestamp, end_timestamp,
+                        snapshot_path, highlight_bbox_json, explanation_vi,
+                        event_type, detected_label, confidence
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        message_id,
+                        frame_id,
+                        start_ts,
+                        end_ts,
+                        snapshot,
+                        bbox_json,
+                        exp_vi,
+                        event_type,
+                        detected_label,
+                        confidence,
+                    ),
+                )
+                saved_evidences.append(
+                    QAEvidence(
+                        id=int(ev_cur.lastrowid),
+                        message_id=message_id,
+                        frame_id=frame_id,
+                        start_timestamp=start_ts,
+                        end_timestamp=end_ts,
+                        snapshot_path=snapshot,
+                        highlight_bbox=bbox,
+                        explanation=exp_vi,
+                        event_type=event_type,
+                        detected_label=detected_label,
+                        confidence=confidence,
+                    )
+                )
 
         return QAMessage(
             id=message_id,
@@ -321,6 +348,127 @@ class QAService:
             question_type=qa_result.get("question_type", QAQuestionType.GENERAL),
             created_at="vừa xong",
             evidences=saved_evidences,
+        )
+
+    def _canonical_snapshot_path(self, stored_path: str) -> Path | None:
+        """Resolve an untrusted snapshot reference without failing unrelated work."""
+        if not stored_path or not isinstance(stored_path, str):
+            return None
+        try:
+            path = resolve_storage_path(stored_path)
+            root = self.snapshots_dir.resolve()
+            if path != root and path.is_relative_to(root):
+                return path
+        except (OSError, ValueError, RuntimeError):
+            pass
+        return None
+
+    def _context_snapshot_provenance(
+        self, context: dict[str, Any],
+    ) -> tuple[dict[Path, set[int]], dict[Path, set[int]]]:
+        """Only the bounded context supplied to reasoning can identify images."""
+        provenance: dict[Path, set[int]] = {}
+        threat_ids_by_path: dict[Path, set[int]] = {}
+        for source, path_key in (("entities", "frame_path"), ("threats", "snapshot_path")):
+            for row in context.get(source, []):
+                frame_id = row.get("frame_id")
+                path = self._canonical_snapshot_path(row.get(path_key))
+                if path is None or type(frame_id) is not int:
+                    continue
+                provenance.setdefault(path, set()).add(frame_id)
+                threat_id = row.get("threat_id")
+                if source == "threats" and type(threat_id) is int:
+                    threat_ids_by_path.setdefault(path, set()).add(threat_id)
+        return provenance, threat_ids_by_path
+
+    def _revalidate_evidences(
+        self, evidences: list[dict], provenance: dict[Path, set[int]],
+        threat_ids_by_path: dict[Path, set[int]], request: QAAskRequest,
+    ) -> list[dict]:
+        """At most two keyed SELECTs, under the lifecycle lock/transaction.
+
+        Frame IDs come from the current response or bounded context. Threat IDs
+        come only from that context, keeping fetched data bounded as well.
+        """
+        candidates = []
+        frame_ids: set[int] = set()
+        threat_ids: set[int] = set()
+        for evidence in evidences:
+            frame_id = evidence.get("frame_id")
+            if frame_id is not None and (type(frame_id) is not int or not 0 < frame_id < 2**63):
+                continue
+            snapshot = evidence.get("snapshot_path")
+            path = self._canonical_snapshot_path(snapshot) if snapshot else None
+            if snapshot and path is None:
+                continue
+            origins = {frame_id} if frame_id is not None else provenance.get(path, set())
+            if snapshot and not origins:
+                continue
+            candidates.append((evidence, path, origins))
+            frame_ids.update(origins)
+            threat_ids.update(threat_ids_by_path.get(path, set()))
+
+        current_frames: dict[int, set[Path]] = {}
+        if frame_ids:
+            parameters = list(frame_ids)
+            conditions = [f"id IN ({','.join('?' for _ in parameters)})"]
+            if request.session_or_video_id is not None:
+                conditions.append("session_or_video_id = ?")
+                parameters.append(request.session_or_video_id)
+            if request.camera_id is not None:
+                conditions.append("camera_id = ?")
+                parameters.append(request.camera_id)
+            rows = self.connection.execute(
+                "SELECT id, frame_path FROM video_frames WHERE " + " AND ".join(conditions), parameters,
+            ).fetchall()
+            for row in rows:
+                path = self._canonical_snapshot_path(row["frame_path"])
+                current_frames[row["id"]] = {path} if path is not None else set()
+
+        if threat_ids and current_frames:
+            rows = self.connection.execute(
+                "SELECT id, frame_id, snapshot_path FROM danger_threats WHERE id IN ("
+                + ",".join("?" for _ in threat_ids) + ")", list(threat_ids),
+            ).fetchall()
+            for row in rows:
+                if row["frame_id"] in current_frames:
+                    path = self._canonical_snapshot_path(row["snapshot_path"])
+                    if path is not None:
+                        current_frames[row["frame_id"]].add(path)
+
+        valid = []
+        for evidence, path, origins in candidates:
+            if origins and not any(frame_id in current_frames for frame_id in origins):
+                continue
+            if path is not None:
+                owners = {frame_id for frame_id in origins if path in current_frames.get(frame_id, set())}
+                if len(owners) != 1:
+                    continue
+                try:
+                    if not path.is_file():
+                        continue
+                except (OSError, ValueError):
+                    continue
+                # Every new image card is owned by a surviving frame, including
+                # snapshot-only Gemini evidence. Keep canonical storage spelling.
+                evidence = {**evidence, "frame_id": owners.pop(), "snapshot_path": serialize_storage_path(path)}
+            # Textual/time-range evidence without an image or frame is valid too.
+            valid.append(evidence)
+        return valid
+
+    def _delete_snapshot_evidences(self, snapshot_paths: set[Path]) -> None:
+        """Remove cards by canonical snapshot identity; never unlink their paths."""
+        if not snapshot_paths:
+            return
+        rows = self.connection.execute(
+            "SELECT id, snapshot_path FROM qa_evidences WHERE snapshot_path != ''"
+        ).fetchall()
+        self.connection.executemany(
+            "DELETE FROM qa_evidences WHERE id = ?",
+            [
+                (row["id"],) for row in rows
+                if self._canonical_snapshot_path(row["snapshot_path"]) in snapshot_paths
+            ],
         )
 
     def _gather_surveillance_context(
@@ -361,8 +509,9 @@ class QAService:
 
         # Lấy danger threats
         threat_sql = f"""
-            SELECT dt.frame_id, dt.threat_type, dt.confidence,
-                   dt.snapshot_path, dt.description_en, dt.bbox_json,
+            SELECT dt.id AS threat_id, vf.id AS frame_id,
+                   dt.threat_type, dt.confidence, dt.snapshot_path,
+                   dt.description_en, dt.bbox_json,
                    vf.timestamp_seconds
             FROM danger_threats dt
             JOIN video_frames vf ON dt.frame_id = vf.id
@@ -1078,38 +1227,32 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
         filename: str,
     ) -> QAUploadedVideo:
         """Register an uploaded video and start background indexing."""
-        # Validate conversation exists
-        self.get_conversation(conversation_id)
+        with self.index_manager.lifecycle_lock:
+            # Validate conversation exists
+            self.get_conversation(conversation_id)
 
-        video_id = f"qa_upload_{uuid4().hex[:12]}"
+            video_id = f"qa_upload_{uuid4().hex[:12]}"
 
-        self.connection.execute(
-            """
-            INSERT INTO qa_uploaded_videos (
-                conversation_id, video_id, filename, file_path, status
+            self.connection.execute(
+                """
+                INSERT INTO qa_uploaded_videos (
+                    conversation_id, video_id, filename, file_path, status
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    conversation_id,
+                    video_id,
+                    filename,
+                    str(file_path),
+                    QAUploadedVideoStatus.QUEUED,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                conversation_id,
-                video_id,
-                filename,
-                str(file_path),
-                QAUploadedVideoStatus.QUEUED,
-            ),
-        )
-        self.connection.commit()
+            self.connection.commit()
 
-        # Start background indexing thread
-        thread = threading.Thread(
-            target=self._run_video_indexing,
-            args=(video_id, file_path),
-            name=f"qa-video-index-{video_id}",
-            daemon=True,
-        )
-        thread.start()
+            self.index_manager.start(video_id, file_path)
 
-        return self._get_uploaded_video(video_id)
+            return self._get_uploaded_video(video_id)
 
     def _list_uploaded_videos(self, conversation_id: int) -> list[QAUploadedVideo]:
         rows = self.connection.execute(
@@ -1150,304 +1293,144 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
         return self._get_uploaded_video(video_id)
 
     def delete_uploaded_video(self, video_id: str) -> None:
-        row = self.connection.execute(
-            "SELECT video_id, file_path FROM qa_uploaded_videos WHERE video_id = ?",
-            (video_id,),
-        ).fetchone()
-        if not row:
-            raise ValueError(f"Uploaded video '{video_id}' not found")
+        with self.index_manager.lifecycle_lock:
+            row = self.connection.execute(
+                "SELECT video_id, file_path FROM qa_uploaded_videos WHERE video_id = ?",
+                (video_id,),
+            ).fetchone()
+            if not row:
+                raise ValueError(f"Uploaded video '{video_id}' not found")
+            self.index_manager.cancel(video_id)
+            with self.connection:
+                self._cleanup_uploaded_videos([row])
+                self.connection.execute(
+                    "DELETE FROM qa_uploaded_videos WHERE video_id = ?", (video_id,)
+                )
 
-        self._cleanup_uploaded_video_data(row["video_id"], row["file_path"])
-        self.connection.execute(
-            "DELETE FROM qa_uploaded_videos WHERE video_id = ?",
-            (video_id,),
-        )
-        self.connection.commit()
-
-    def _cleanup_uploaded_video_data(self, video_id: str, file_path: str, delete_file: bool = True) -> None:
-        """Remove video_frames (cascade deletes entities/threats), snapshot files, and optionally the video file."""
-        # Get snapshot paths to delete files (both frame snapshots and threat snapshots)
-        snapshot_rows = self.connection.execute(
+    def _snapshot_paths(self, video_id: str) -> set[str]:
+        rows = self.connection.execute(
             """
-            SELECT frame_path FROM video_frames
-            WHERE session_or_video_id = ? AND frame_path != ''
-            """,
-            (video_id,),
-        ).fetchall()
-        for srow in snapshot_rows:
-            try:
-                p = Path(srow["frame_path"])
-                if not p.is_absolute():
-                    from backend.app.config import BASE_DIR
-                    p = BASE_DIR / p
-                if p.exists() and p.is_file():
-                    p.unlink()
-            except OSError:
-                pass
-
-        threat_snapshot_rows = self.connection.execute(
-            """
-            SELECT dt.snapshot_path FROM danger_threats dt
+            SELECT frame_path AS path FROM video_frames WHERE session_or_video_id = ?
+            UNION
+            SELECT dt.snapshot_path AS path FROM danger_threats dt
             JOIN video_frames vf ON dt.frame_id = vf.id
-            WHERE vf.session_or_video_id = ? AND dt.snapshot_path != ''
+            WHERE vf.session_or_video_id = ?
             """,
-            (video_id,),
+            (video_id, video_id),
         ).fetchall()
-        for trow in threat_snapshot_rows:
-            try:
-                p = Path(trow["snapshot_path"])
-                if not p.is_absolute():
-                    from backend.app.config import BASE_DIR
-                    p = BASE_DIR / p
-                if p.exists() and p.is_file():
-                    p.unlink()
-            except OSError:
-                pass
+        return {row["path"] for row in rows if row["path"]}
 
-        # Explicitly delete child rows (and rely on CASCADE)
-        self.connection.execute(
-            """
-            DELETE FROM detected_entities
-            WHERE frame_id IN (SELECT id FROM video_frames WHERE session_or_video_id = ?)
-            """,
-            (video_id,),
-        )
-        self.connection.execute(
-            """
-            DELETE FROM danger_threats
-            WHERE frame_id IN (SELECT id FROM video_frames WHERE session_or_video_id = ?)
-            """,
-            (video_id,),
-        )
-        self.connection.execute(
-            "DELETE FROM security_events WHERE session_or_video_id = ?",
-            (video_id,),
-        )
+    @staticmethod
+    def _cleanup_path(stored_path: str, storage_root: Path) -> Path:
+        path = resolve_storage_path(stored_path)
+        root = storage_root.resolve()
+        if path == root or not path.is_relative_to(root):
+            logger.error("Refusing Q&A cleanup path %s outside storage root %s", path, root)
+            raise QAVideoCleanupError("Q&A cleanup encountered an invalid storage path")
+        return path
 
-        # Delete video_frames
-        self.connection.execute(
-            "DELETE FROM video_frames WHERE session_or_video_id = ?",
-            (video_id,),
-        )
-        self.connection.commit()
+    def _cleanup_uploaded_videos(self, video_rows, *, delete_file: bool = True) -> None:
+        """Stop workers before calling. No commits: callers own the transaction."""
+        targets = {row["video_id"]: self._snapshot_paths(row["video_id"]) for row in video_rows}
+        # Resolve and validate the entire batch before unlinking anything. Dedup
+        # resolved paths too, since relative/absolute spellings can alias a file.
+        path = None
+        try:
+            directories = {
+                video_id: qa_video_snapshot_dir(video_id, qa_root=self.qa_snapshots_dir)
+                for video_id in targets
+            }
+            qa_root = self._cleanup_path(str(self.qa_snapshots_dir), self.snapshots_dir)
+            legacy_files: set[Path] = set()
+            for video_id, snapshot_paths in targets.items():
+                directory = directories[video_id]
+                for stored_path in snapshot_paths:
+                    path = self._cleanup_path(stored_path, self.snapshots_dir)
+                    if path != directory and path.is_relative_to(directory):
+                        continue
+                    if path.is_relative_to(qa_root):
+                        raise QAVideoCleanupError("Q&A snapshot path belongs to another video")
+                    legacy_files.add(path)
+            files = legacy_files.copy()
+            if delete_file:
+                files.update(
+                    self._cleanup_path(row["file_path"], self.uploads_dir)
+                    for row in video_rows if row["file_path"]
+                )
+            # All directories/files in the batch have been validated. Orphans
+            # within each exact owned directory are removed with its snapshots.
+            for video_id, path in directories.items():
+                if path != qa_video_snapshot_dir(video_id, qa_root=self.qa_snapshots_dir):
+                    raise QAVideoCleanupError("Q&A snapshot directory ownership changed")
+                try:
+                    shutil.rmtree(path)
+                except FileNotFoundError:
+                    if path.exists():
+                        raise
+            for path in sorted(files):
+                path.unlink(missing_ok=True)
+        except (OSError, ValueError, RuntimeError) as exc:
+            logger.exception("Q&A filesystem cleanup failed for videos %s at %s", list(targets), path)
+            raise QAVideoCleanupError(
+                "Could not remove Q&A video files; please retry deletion"
+            ) from exc
 
-        # Delete the video file if requested
-        if delete_file:
-            try:
-                fp = Path(file_path)
-                if fp.exists() and fp.is_file():
-                    fp.unlink()
-            except OSError:
-                pass
+        # Only after every file was cleaned do we discard retry metadata.
+        for video_id in targets:
+            self.connection.execute(
+                """
+                DELETE FROM qa_evidences WHERE frame_id IN
+                    (SELECT id FROM video_frames WHERE session_or_video_id = ?)
+                """,
+                (video_id,),
+            )
+        # Only legacy flat data needs the canonical scan for unowned/alias cards.
+        # New image cards are removed by their indexed frame_id above.
+        if legacy_files:
+            self._delete_snapshot_evidences(legacy_files)
+        for video_id in targets:
+            for table in ("detected_entities", "danger_threats"):
+                self.connection.execute(
+                    f"DELETE FROM {table} WHERE frame_id IN "
+                    "(SELECT id FROM video_frames WHERE session_or_video_id = ?)",
+                    (video_id,),
+                )
+            self.connection.execute(
+                "DELETE FROM security_events WHERE session_or_video_id = ?",
+                (video_id,),
+            )
+            self.connection.execute(
+                "DELETE FROM video_frames WHERE session_or_video_id = ?", (video_id,)
+            )
 
     def retry_uploaded_video(self, video_id: str) -> QAUploadedVideo:
-        """Retry indexing a previously failed video without re-uploading."""
-        row = self.connection.execute(
-            "SELECT video_id, file_path FROM qa_uploaded_videos WHERE video_id = ?",
-            (video_id,),
-        ).fetchone()
-        if not row:
-            raise ValueError(f"Uploaded video '{video_id}' not found")
-
-        fp = Path(row["file_path"])
-        if not fp.exists():
-            raise ValueError("Video file is no longer on disk. Please upload again.")
-
-        # Clean up any partial frames/entities/threats but keep video file
-        self._cleanup_uploaded_video_data(row["video_id"], row["file_path"], delete_file=False)
-
-        # Reset status to queued
-        self.connection.execute(
-            """
-            UPDATE qa_uploaded_videos
-            SET status = ?, processed_frames = 0, indexed_frames = 0,
-                source_fps = NULL, analysis_fps = NULL,
-                error_message = NULL, completed_at = NULL
-            WHERE video_id = ?
-            """,
-            (QAUploadedVideoStatus.QUEUED, video_id),
-        )
-        self.connection.commit()
-
-        # Start background indexing thread
-        thread = threading.Thread(
-            target=self._run_video_indexing,
-            args=(video_id, fp),
-            name=f"qa-video-index-{video_id}",
-            daemon=True,
-        )
-        thread.start()
-
-        return self._get_uploaded_video(video_id)
-
-    def _run_video_indexing(self, video_id: str, file_path: Path) -> None:
-        """Background thread: process video frames and index into DB."""
-        connection = None
-        capture = None
-        event_aggregator = None
-        try:
-            connection = get_connection()
-
-            # Update status to processing
-            connection.execute(
-                "UPDATE qa_uploaded_videos SET status = ? WHERE video_id = ?",
-                (QAUploadedVideoStatus.PROCESSING, video_id),
-            )
-            connection.commit()
-
-            capture = cv2.VideoCapture(str(file_path))
-            if not capture.isOpened():
-                raise RuntimeError(f"Could not open video: {file_path}")
-
-            reported_fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
-            input_fps, sample_interval, effective_analysis_fps = (
-                calculate_video_qa_sampling(
-                    reported_fps,
-                    VIDEO_QA_ANALYSIS_FPS,
+        """Retry without allowing a previous worker to write into the new index."""
+        with self.index_manager.lifecycle_lock:
+            row = self.connection.execute(
+                "SELECT video_id, file_path FROM qa_uploaded_videos WHERE video_id = ?",
+                (video_id,),
+            ).fetchone()
+            if not row:
+                raise ValueError(f"Uploaded video '{video_id}' not found")
+            self.index_manager.cancel(video_id)
+            fp = self._cleanup_path(row["file_path"], self.uploads_dir)
+            if not fp.exists():
+                raise ValueError("Video file is no longer on disk. Please upload again.")
+            with self.connection:
+                self._cleanup_uploaded_videos([row], delete_file=False)
+                self.connection.execute(
+                    """
+                    UPDATE qa_uploaded_videos
+                    SET status = ?, processed_frames = 0, indexed_frames = 0,
+                        source_fps = NULL, analysis_fps = NULL,
+                        error_message = NULL, completed_at = NULL
+                    WHERE video_id = ?
+                    """,
+                    (QAUploadedVideoStatus.QUEUED, video_id),
                 )
-            )
-            total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-            connection.execute(
-                """
-                UPDATE qa_uploaded_videos
-                SET total_frames = ?, source_fps = ?, analysis_fps = ?
-                WHERE video_id = ?
-                """,
-                (
-                    total_frames if total_frames > 0 else None,
-                    input_fps,
-                    effective_analysis_fps,
-                    video_id,
-                ),
-            )
-            connection.commit()
+            self.index_manager.start(video_id, fp)
+            return self._get_uploaded_video(video_id)
 
-            # Analyze at the configured target rate without oversampling videos
-            # whose source FPS is lower than that target.
-
-            from backend.services.frame_indexer_service import FrameIndexerService
-            indexer = FrameIndexerService(connection)
-
-            from backend.services.security_event_aggregator import (
-                SecurityEventAggregator,
-            )
-            event_aggregator = SecurityEventAggregator(
-                connection,
-                session_or_video_id=video_id,
-            )
-
-            from backend.services.gallery_service import build_analysis_runtime
-            runtime = build_analysis_runtime(connection)
-
-            frame_index = 0
-            indexed_count = 0
-            while True:
-                success, frame = capture.read()
-                if not success or frame is None:
-                    break
-
-                if frame_index % sample_interval == 0:
-                    timestamp_seconds = frame_index / input_fps if input_fps > 0 else 0.0
-
-                    analysis = runtime.engine.analyze_frame(
-                        frame,
-                        frame_index=frame_index,
-                        timestamp_seconds=timestamp_seconds,
-                    )
-
-                    # Get raw YOLO detections for threat/object detection
-                    raw_detections = []
-                    person_tracker = getattr(runtime.engine, "person_tracker", None)
-                    if person_tracker is not None and hasattr(
-                        person_tracker,
-                        "detect_objects",
-                    ):
-                        try:
-                            raw_detections = person_tracker.detect_objects(frame)
-                        except Exception:
-                            pass
-
-                    frame_id = indexer.index_frame(
-                        frame,
-                        camera_id=None,
-                        session_or_video_id=video_id,
-                        timestamp_seconds=timestamp_seconds,
-                        frame_number=frame_index,
-                        analysis=analysis,
-                        raw_object_detections=raw_detections,
-                    )
-                    event_aggregator.process_frame(
-                        frame_id=frame_id,
-                        timestamp_seconds=timestamp_seconds,
-                        analysis=analysis,
-                    )
-                    indexed_count += 1
-
-                frame_index += 1
-
-                # Update progress every 30 frames
-                if frame_index % 30 == 0:
-                    connection.execute(
-                        """
-                        UPDATE qa_uploaded_videos
-                        SET processed_frames = ?, indexed_frames = ?
-                        WHERE video_id = ?
-                        """,
-                        (frame_index, indexed_count, video_id),
-                    )
-                    connection.commit()
-
-            event_aggregator.flush()
-
-            # Mark completed
-            connection.execute(
-                """
-                UPDATE qa_uploaded_videos
-                SET status = ?, processed_frames = ?, indexed_frames = ?,
-                    completed_at = ?
-                WHERE video_id = ?
-                """,
-                (
-                    QAUploadedVideoStatus.COMPLETED,
-                    frame_index,
-                    indexed_count,
-                    datetime.now(timezone.utc).isoformat(),
-                    video_id,
-                ),
-            )
-            connection.commit()
-            logger.info("Video indexing completed: %s (%d frames, %d indexed)", video_id, frame_index, indexed_count)
-
-        except Exception as exc:
-            logger.exception("Video indexing failed for %s", video_id)
-            if connection:
-                try:
-                    if event_aggregator is not None:
-                        event_aggregator.flush()
-                    connection.execute(
-                        """
-                        UPDATE qa_uploaded_videos
-                        SET status = ?, error_message = ?, completed_at = ?
-                        WHERE video_id = ?
-                        """,
-                        (
-                            QAUploadedVideoStatus.FAILED,
-                            str(exc),
-                            datetime.now(timezone.utc).isoformat(),
-                            video_id,
-                        ),
-                    )
-                    connection.commit()
-                except Exception:
-                    pass
-        finally:
-            if capture is not None:
-                try:
-                    capture.release()
-                except Exception:
-                    pass
-            if connection is not None:
-                connection.close()
 
     @staticmethod
     def _row_to_uploaded_video(row: sqlite3.Row) -> QAUploadedVideo:
