@@ -668,18 +668,20 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                 return None
 
         # 1. KIỂM TRA DAO / VŨ KHÍ / NGUY HIỂM (Threats)
-        if any(w in q_lower for w in ["dao", "vũ khí", "súng", "cháy", "nổ", "nguy hiểm", "đe dọa", "đánh nhau", "bạo lực", "cướp", "trộm"]):
+        if any(w in q_lower for w in ["dao", "vũ khí", "súng", "cháy", "nổ", "nguy hiểm", "đe dọa", "đánh nhau", "bạo lực", "cướp", "trộm", "giật"]):
             requested_event_types: set[str] = set()
             if "dao" in q_lower:
-                requested_event_types.add("knife_present")
+                requested_event_types.update({"knife_present", "knife_threat"})
+            if any(w in q_lower for w in ["bắn", "bắn súng", "nổ súng"]):
+                requested_event_types.update({"shooting", "weapon_drawn", "weapon_present"})
             if any(w in q_lower for w in ["súng", "vũ khí"]):
-                requested_event_types.update({"weapon_present", "knife_present"})
+                requested_event_types.update({"shooting", "weapon_present", "weapon_drawn", "knife_present", "knife_threat"})
             if any(w in q_lower for w in ["cháy", "nổ"]):
                 requested_event_types.add("fire_smoke")
             if any(w in q_lower for w in ["đánh nhau", "bạo lực"]):
-                requested_event_types.add("violence")
-            if any(w in q_lower for w in ["cướp", "trộm"]):
-                requested_event_types.add("possible_theft")
+                requested_event_types.update({"fighting", "violence"})
+            if any(w in q_lower for w in ["cướp", "trộm", "giật"]):
+                requested_event_types.update({"possible_theft", "theft", "robbery_backpack", "robbery_phone", "robbery_motorbike"})
             matching_event = next(
                 (
                     event
@@ -702,6 +704,22 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                 except (TypeError, json.JSONDecodeError):
                     labels = []
                 detected_label = labels[0] if labels else None
+                evt_vn_map = {
+                    "knife_present": "phát hiện dao",
+                    "knife_threat": "đe dọa bằng dao",
+                    "weapon_present": "phát hiện vũ khí/súng",
+                    "weapon_drawn": "rút súng đe dọa",
+                    "shooting": "bắn súng / nổ súng",
+                    "fire_smoke": "cháy nổ / khói lửa",
+                    "possible_theft": "nghi vấn trộm cắp",
+                    "theft": "hành vi trộm cắp",
+                    "robbery_backpack": "cướp giật balo",
+                    "robbery_phone": "cướp giật điện thoại",
+                    "robbery_motorbike": "cướp xe máy",
+                    "violence": "hành vi bạo lực",
+                    "fighting": "đánh nhau / ẩu đả",
+                }
+                event_name_vi = evt_vn_map.get(matching_event['event_type'], matching_event['event_type'])
                 return {
                     "translated_query_en": f"Find the recorded security event related to: {user_question}",
                     "question_type": QAQuestionType.THREAT,
@@ -710,7 +728,7 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                         f"from {start_ts:.2f}s to {end_ts:.2f}s."
                     ),
                     "response_vi": (
-                        f"Phát hiện sự kiện {matching_event['event_type']} từ "
+                        f"Phát hiện sự kiện {event_name_vi} ({matching_event['event_type']}) từ "
                         f"{start_ts:.2f}s đến {end_ts:.2f}s."
                     ),
                     "evidences": [{
@@ -728,16 +746,31 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                         "confidence": matching_event.get("confidence"),
                     }],
                 }
-            requested_threat_types = {
-                {
-                    "knife_present": "knife_threat",
-                    "weapon_present": "weapon_drawn",
-                    "fire_smoke": "fire_smoke",
-                    "possible_theft": "theft",
-                    "violence": "violence",
-                }[event_type]
-                for event_type in requested_event_types
+            threat_type_alias_map = {
+                "knife_present": "knife_threat",
+                "knife_threat": "knife_threat",
+                "weapon_present": "weapon_drawn",
+                "weapon_drawn": "weapon_drawn",
+                "shooting": "shooting",
+                "fire_smoke": "fire_smoke",
+                "possible_theft": "theft",
+                "theft": "theft",
+                "robbery_backpack": "robbery_backpack",
+                "robbery_phone": "robbery_phone",
+                "robbery_motorbike": "robbery_motorbike",
+                "violence": "violence",
+                "fighting": "fighting",
             }
+            requested_threat_types = {
+                threat_type_alias_map[event_type]
+                for event_type in requested_event_types
+                if event_type in threat_type_alias_map
+            }
+            # Also allow fallback to generic theft / violence if specific threat type matches
+            if any(t in requested_threat_types for t in ["robbery_backpack", "robbery_phone", "robbery_motorbike"]):
+                requested_threat_types.add("theft")
+            if "fighting" in requested_threat_types:
+                requested_threat_types.add("violence")
             matching_threat = next(
                 (
                     threat
@@ -981,8 +1014,8 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                             "evidences": evidences,
                         }
 
-        # 3. KIỂM TRA LẤY TRỘM / BALO / ĐỒ VẬT / PHỤ KIỆN (Object & Theft Reasoning)
-        if any(w in q_lower for w in ["balo", "lấy", "trộm", "điện thoại", "cầm", "túi", "nón", "mũ", "khẩu trang", "kính", "ăn", "uống", "đồ ăn", "chai", "ly"]):
+        # 3. KIỂM TRA LẤY TRỘM / BALO / ĐỒ VẬT / PHỤ KIỆN / XE CỘ / ĐỒ ĂN (Object & Theft Reasoning)
+        if any(w in q_lower for w in ["balo", "lấy", "trộm", "điện thoại", "cầm", "túi", "nón", "mũ", "khẩu trang", "kính", "ăn", "uống", "đồ ăn", "chai", "ly", "xe", "xe máy", "xe đạp"]):
             requested_labels: set[str] = set()
             accessory_queries = {
                 "balo": {"backpack"},
@@ -991,9 +1024,12 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                 "nón": {"hat", "cap", "helmet"},
                 "mũ": {"hat", "cap", "helmet"},
                 "kính": {"glasses", "eyeglasses", "sunglasses"},
-                "đồ ăn": {"food", "pizza", "sandwich", "cake"},
+                "đồ ăn": {"food", "pizza", "sandwich", "cake", "bread", "hamburger", "snack", "fruit", "apple", "banana"},
                 "chai": {"bottle"},
                 "ly": {"cup"},
+                "xe máy": {"motorcycle", "motorbike", "scooter"},
+                "xe đạp": {"bicycle", "bike"},
+                "xe": {"motorcycle", "motorbike", "scooter", "bicycle", "bike"},
             }
             for keyword, labels in accessory_queries.items():
                 if keyword in q_lower:
@@ -1018,6 +1054,17 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                 "bottle": "chai nước",
                 "pizza": "bánh pizza",
                 "sandwich": "bánh mì",
+                "bread": "bánh mì",
+                "hamburger": "hamburger",
+                "snack": "đồ ăn nhẹ",
+                "fruit": "trái cây",
+                "apple": "quả táo",
+                "banana": "quả chuối",
+                "motorcycle": "xe máy",
+                "motorbike": "xe máy",
+                "scooter": "xe tay ga",
+                "bicycle": "xe đạp",
+                "bike": "xe đạp",
             }
 
             person_accessory_match = None
@@ -1083,7 +1130,9 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                 "backpack", "phone", "cell phone", "knife", "bag",
                 "handbag", "suitcase", "hat", "cap", "helmet",
                 "glasses", "eyeglasses", "sunglasses", "food", "cup",
-                "bottle", "pizza", "sandwich", "cake",
+                "bottle", "pizza", "sandwich", "cake", "bread",
+                "hamburger", "snack", "fruit", "apple", "banana",
+                "motorcycle", "motorbike", "scooter", "bicycle", "bike",
             }
             obj_entity = next(
                 (

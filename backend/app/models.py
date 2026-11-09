@@ -49,6 +49,27 @@ class ThreatType(StrEnum):
     FIRE_SMOKE = "fire_smoke"
     THEFT = "theft"
     VIOLENCE = "violence"
+    FIGHTING = "fighting"
+    ROBBERY_BACKPACK = "robbery_backpack"
+    ROBBERY_PHONE = "robbery_phone"
+    ROBBERY_MOTORBIKE = "robbery_motorbike"
+    SHOOTING = "shooting"
+
+
+class SecurityEventType(StrEnum):
+    FIGHTING = "fighting"
+    VIOLENCE = "violence"
+    THEFT = "theft"
+    ROBBERY_BACKPACK = "robbery_backpack"
+    ROBBERY_PHONE = "robbery_phone"
+    ROBBERY_MOTORBIKE = "robbery_motorbike"
+    KNIFE_THREAT = "knife_threat"
+    KNIFE_PRESENT = "knife_present"
+    WEAPON_DRAWN = "weapon_drawn"
+    WEAPON_PRESENT = "weapon_present"
+    SHOOTING = "shooting"
+    FIRE_SMOKE = "fire_smoke"
+    FOOD_INTERACTION = "food_interaction"
 class QAQuestionType(StrEnum):
     IDENTITY = "identity"
     ATTRIBUTE = "attribute"
@@ -222,3 +243,25 @@ class QAUploadedVideoRecord:
     error_message: str | None
     created_at: str
     completed_at: str | None
+
+
+@dataclass(frozen=True)
+class SecurityEventRecord:
+    id: int
+    session_or_video_id: str
+    camera_id: int | None
+    event_type: str
+    start_timestamp: float
+    end_timestamp: float
+    confidence: float
+    primary_frame_id: int | None
+    snapshot_path: str
+    clip_path: str | None
+    actor_track_ids_json: str
+    object_labels_json: str
+    bbox_json: str | None
+    metadata_json: str
+    model_version: str
+    status: str
+    created_at: str
+    updated_at: str

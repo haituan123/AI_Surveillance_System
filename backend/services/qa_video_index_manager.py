@@ -243,6 +243,8 @@ class QAVideoIndexManager:
                     self._update(connection, job, "processed_frames = ?", (frame_index,))
             if cancelled():
                 return
+            if indexer is not None and hasattr(indexer, "flush"):
+                indexer.flush(job.video_id)
             self._update(
                 connection, job,
                 "status = ?, processed_frames = ?, completed_at = ?",

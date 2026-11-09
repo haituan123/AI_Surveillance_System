@@ -6,11 +6,13 @@ from typing import Any
 import cv2
 import numpy as np
 
+from backend.ai.action_detector import ActionVerifier
 from backend.ai.attribute_extractor import AttributeExtractor
-from backend.ai.contracts import FrameAnalysis
-from backend.ai.threat_detector import ThreatAndObjectDetector
+from backend.ai.contracts import BoundingBox, FrameAnalysis
+from backend.ai.threat_detector import ThreatAndObjectDetector, ThreatEvent
 from backend.app.config import SNAPSHOTS_DIR, serialize_storage_path
 from backend.app.models import EntityType, ThreatType
+from backend.services.security_event_aggregator import SecurityEventAggregator
 
 
 PERSON_ACCESSORY_LABELS = {
@@ -37,11 +39,15 @@ class FrameIndexerService:
         connection: sqlite3.Connection,
         *,
         snapshots_dir: Path = SNAPSHOTS_DIR,
+        action_verifier: ActionVerifier | None = None,
     ) -> None:
         self.connection = connection
         self.snapshots_dir = snapshots_dir
         self.attribute_extractor = AttributeExtractor()
         self.threat_detector = ThreatAndObjectDetector()
+        self.action_verifier = action_verifier or ActionVerifier()
+        self._aggregators: dict[str, SecurityEventAggregator] = {}
+        self._frame_buffers: dict[str, list[np.ndarray]] = {}
 
     def index_frame(
         self,
@@ -60,7 +66,62 @@ class FrameIndexerService:
         detected_objects, threat_events = self.threat_detector.evaluate_detections(
             raw_object_detections or [],
             person_boxes=person_boxes,
+            frame_bgr=frame_bgr,
         )
+
+        # Buffer recent frames for temporal action analysis (VideoMAE / ActionVerifier)
+        buffer = self._frame_buffers.setdefault(session_or_video_id, [])
+        buffer.append(frame_bgr)
+        if len(buffer) > 16:
+            buffer.pop(0)
+
+        # Check interaction: Two or more people in close proximity -> Verify fighting
+        if len(analysis.tracks) >= 2:
+            for i in range(len(analysis.tracks)):
+                for j in range(i + 1, len(analysis.tracks)):
+                    b1 = analysis.tracks[i].bounding_box
+                    b2 = analysis.tracks[j].bounding_box
+                    if (max(b1.x1, b2.x1) < min(b1.x2, b2.x2) + 60) and (max(b1.y1, b2.y1) < min(b1.y2, b2.y2) + 60):
+                        u_box = BoundingBox(
+                            min(b1.x1, b2.x1),
+                            min(b1.y1, b2.y1),
+                            max(b1.x2, b2.x2),
+                            max(b1.y2, b2.y2),
+                        )
+                        act_res = self.action_verifier.verify_clip(
+                            buffer,
+                            interaction_box=u_box,
+                            suspected_action=ThreatType.FIGHTING,
+                        )
+                        if act_res.is_suspicious and act_res.action_type in [ThreatType.FIGHTING, ThreatType.VIOLENCE, "fighting"]:
+                            threat_events.append(
+                                ThreatEvent(
+                                    threat_type=ThreatType.FIGHTING,
+                                    confidence=act_res.confidence,
+                                    description_en=act_res.description_en,
+                                    bounding_box=u_box,
+                                )
+                            )
+                            break
+
+        # Check interaction: Weapon drawn -> Verify shooting / firing
+        for threat in list(threat_events):
+            if threat.threat_type == ThreatType.WEAPON_DRAWN:
+                act_res = self.action_verifier.verify_clip(
+                    buffer,
+                    interaction_box=threat.bounding_box,
+                    suspected_action=ThreatType.SHOOTING,
+                )
+                if act_res.is_suspicious and act_res.action_type in [ThreatType.SHOOTING, "shooting"]:
+                    threat_events.append(
+                        ThreatEvent(
+                            threat_type=ThreatType.SHOOTING,
+                            confidence=act_res.confidence,
+                            description_en=act_res.description_en,
+                            bounding_box=threat.bounding_box,
+                        )
+                    )
+
         accessories_by_track = self._associate_accessories(
             analysis,
             detected_objects,
@@ -192,6 +253,14 @@ class FrameIndexerService:
                 ),
             )
 
+        # Aggregate threats into persistent security_events
+        aggregator = self._get_aggregator(session_or_video_id, camera_id=camera_id)
+        aggregator.process_frame(
+            frame_id=frame_id,
+            timestamp_seconds=timestamp_seconds,
+            analysis=analysis,
+        )
+
         self.connection.commit()
         return frame_id
 
@@ -260,5 +329,27 @@ class FrameIndexerService:
             )
         return associations
 
+    def _get_aggregator(self, session_or_video_id: str, camera_id: int | None = None) -> SecurityEventAggregator:
+        if session_or_video_id not in self._aggregators:
+            self._aggregators[session_or_video_id] = SecurityEventAggregator(
+                self.connection,
+                session_or_video_id=session_or_video_id,
+                min_confirmations=1,
+            )
+        return self._aggregators[session_or_video_id]
+
+    def flush(self, session_or_video_id: str | None = None) -> None:
+        if session_or_video_id is not None:
+            agg = self._aggregators.pop(session_or_video_id, None)
+            if agg is not None:
+                agg.flush()
+            self._frame_buffers.pop(session_or_video_id, None)
+        else:
+            for agg in self._aggregators.values():
+                agg.flush()
+            self._aggregators.clear()
+            self._frame_buffers.clear()
+
     def reset(self) -> None:
+        self.flush()
         self.attribute_extractor.movement_tracker.reset()

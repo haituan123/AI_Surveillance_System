@@ -9,9 +9,14 @@ from backend.ai.contracts import BoundingBox, FrameAnalysis
 EVENT_TYPE_MAP = {
     "knife_threat": "knife_present",
     "weapon_drawn": "weapon_present",
+    "shooting": "shooting",
     "fire_smoke": "fire_smoke",
     "theft": "possible_theft",
     "violence": "violence",
+    "fighting": "fighting",
+    "robbery_backpack": "robbery_backpack",
+    "robbery_phone": "robbery_phone",
+    "robbery_motorbike": "robbery_motorbike",
 }
 
 
@@ -40,7 +45,7 @@ class SecurityEventAggregator:
         connection: sqlite3.Connection,
         *,
         session_or_video_id: str,
-        min_confirmations: int = 2,
+        min_confirmations: int = 1,
         max_gap_seconds: float = 1.0,
         model_version: str = "rule-v1",
     ) -> None:
@@ -263,15 +268,23 @@ class SecurityEventAggregator:
         text = description.lower()
         if threat_type == "knife_threat":
             return "scissors" if "sharp" in text else "knife"
-        if threat_type == "weapon_drawn":
+        if threat_type in ["weapon_drawn", "shooting"]:
+            for w in ("pistol", "rifle", "handgun", "shotgun"):
+                if w in text:
+                    return w
             return "gun"
         if threat_type == "fire_smoke":
             return "smoke" if "smoke" in text else "fire"
-        if threat_type == "theft":
-            for label in ("backpack", "handbag", "cell phone", "laptop"):
+        if threat_type in ["theft", "robbery_backpack", "robbery_phone", "robbery_motorbike"]:
+            for label in (
+                "motorcycle", "motorbike", "bicycle", "bike", "scooter",
+                "backpack", "handbag", "cell phone", "phone", "laptop",
+            ):
                 if label in text:
                     return label
             return "object"
+        if threat_type in ["violence", "fighting"]:
+            return "person"
         return threat_type
 
     @staticmethod

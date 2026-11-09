@@ -29,13 +29,26 @@ THREAT_CLASS_MAP = {
     # Weapons & Violence
     "knife": (ThreatType.KNIFE_THREAT, EntityType.WEAPON, "Person detected holding a knife"),
     "scissors": (ThreatType.KNIFE_THREAT, EntityType.WEAPON, "Sharp object detected"),
+    "dagger": (ThreatType.KNIFE_THREAT, EntityType.WEAPON, "Dagger detected"),
+    "machete": (ThreatType.KNIFE_THREAT, EntityType.WEAPON, "Machete detected"),
+    "sword": (ThreatType.KNIFE_THREAT, EntityType.WEAPON, "Sword/Blade detected"),
     "gun": (ThreatType.WEAPON_DRAWN, EntityType.WEAPON, "Firearm detected"),
+    "pistol": (ThreatType.WEAPON_DRAWN, EntityType.WEAPON, "Pistol detected"),
+    "rifle": (ThreatType.WEAPON_DRAWN, EntityType.WEAPON, "Rifle detected"),
+    "firearm": (ThreatType.WEAPON_DRAWN, EntityType.WEAPON, "Firearm detected"),
+    "handgun": (ThreatType.WEAPON_DRAWN, EntityType.WEAPON, "Handgun detected"),
     # Fire & Smoke
     "fire": (ThreatType.FIRE_SMOKE, EntityType.OBJECT, "Fire hazard detected"),
     "smoke": (ThreatType.FIRE_SMOKE, EntityType.OBJECT, "Smoke detected"),
 }
 
 SURVEILLANCE_OBJECT_CLASSES = {
+    # Vehicles (for snatching/theft tracking)
+    "motorcycle": EntityType.OBJECT,
+    "motorbike": EntityType.OBJECT,
+    "bicycle": EntityType.OBJECT,
+    "bike": EntityType.OBJECT,
+    "scooter": EntityType.OBJECT,
     # Bags & Luggage
     "backpack": EntityType.OBJECT,
     "handbag": EntityType.OBJECT,
@@ -63,6 +76,12 @@ SURVEILLANCE_OBJECT_CLASSES = {
     "cake": EntityType.OBJECT,
     "apple": EntityType.OBJECT,
     "banana": EntityType.OBJECT,
+    "drink": EntityType.OBJECT,
+    "beverage": EntityType.OBJECT,
+    "snack": EntityType.OBJECT,
+    "bread": EntityType.OBJECT,
+    "hamburger": EntityType.OBJECT,
+    "fruit": EntityType.OBJECT,
     # Common Furniture & Objects
     "chair": EntityType.OBJECT,
     "book": EntityType.OBJECT,
@@ -75,10 +94,44 @@ class ThreatAndObjectDetector:
     def __init__(self, confidence_threshold: float = 0.35) -> None:
         self.confidence_threshold = confidence_threshold
 
+    @staticmethod
+    def detect_flame_regions(
+        frame_bgr: np.ndarray,
+        min_area: int = 120,
+    ) -> list[tuple[BoundingBox, float]]:
+        """Detects active fire/flame regions using combined RGB and HSV color space analysis."""
+        if frame_bgr is None or frame_bgr.size == 0:
+            return []
+
+        # 1. RGB condition: Intense red component (R > G > B and R > 185)
+        b, g, r = cv2.split(frame_bgr)
+        rgb_mask = (r > 185) & (r > g) & (g > b)
+
+        # 2. HSV condition: Hue in red-to-yellow range, strong saturation & high luminance
+        hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
+        h, s, v = cv2.split(hsv)
+        hsv_mask = ((h <= 25) | (h >= 168)) & (s >= 50) & (v >= 180)
+
+        combined = (rgb_mask & hsv_mask).astype(np.uint8) * 255
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        filtered = cv2.morphologyEx(combined, cv2.MORPH_OPEN, kernel)
+
+        contours, _ = cv2.findContours(filtered, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        flames: list[tuple[BoundingBox, float]] = []
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area >= min_area:
+                x, y, w, h_box = cv2.boundingRect(cnt)
+                bbox = BoundingBox(x1=x, y1=y, x2=x + w, y2=y + h_box)
+                conf = min(0.95, 0.72 + min(0.23, area / 2000.0))
+                flames.append((bbox, round(conf, 2)))
+        return flames
+
     def evaluate_detections(
         self,
         raw_detections: list[dict[str, Any]],
         person_boxes: list[BoundingBox] | None = None,
+        frame_bgr: np.ndarray | None = None,
     ) -> tuple[list[DetectedObject], list[ThreatEvent]]:
         detected_objects: list[DetectedObject] = []
         threat_events: list[ThreatEvent] = []
@@ -126,20 +179,63 @@ class ThreatAndObjectDetector:
                     )
                 )
 
-        # Check interaction: Person touching/taking object (Theft heuristic)
+        # Visual fire detection fallback if no model detected fire directly
+        if frame_bgr is not None and not any(o.label == "fire" for o in detected_objects):
+            for flame_box, flame_conf in self.detect_flame_regions(frame_bgr):
+                detected_objects.append(
+                    DetectedObject(
+                        label="fire",
+                        entity_type=EntityType.OBJECT,
+                        bounding_box=flame_box,
+                        confidence=flame_conf,
+                    )
+                )
+                threat_events.append(
+                    ThreatEvent(
+                        threat_type=ThreatType.FIRE_SMOKE,
+                        confidence=flame_conf,
+                        description_en="Fire hazard detected via visual flame analysis",
+                        bounding_box=flame_box,
+                    )
+                )
+
+        # Check interaction: Person touching/taking object (Theft / Robbery heuristic)
         if person_boxes:
             for obj in detected_objects:
-                if obj.label in ["backpack", "handbag", "cell phone", "laptop"]:
+                if obj.label in [
+                    "backpack", "handbag", "bag", "suitcase",
+                    "cell phone", "phone", "laptop",
+                    "motorcycle", "motorbike", "bicycle", "bike", "scooter"
+                ]:
                     for pbox in person_boxes:
                         if self._is_interacting(pbox, obj.bounding_box):
+                            if obj.label in ["backpack", "handbag", "bag", "suitcase"]:
+                                specific_threat = ThreatType.ROBBERY_BACKPACK
+                            elif obj.label in ["cell phone", "phone", "laptop"]:
+                                specific_threat = ThreatType.ROBBERY_PHONE
+                            elif obj.label in ["motorcycle", "motorbike", "bicycle", "bike", "scooter"]:
+                                specific_threat = ThreatType.ROBBERY_MOTORBIKE
+                            else:
+                                specific_threat = ThreatType.THEFT
+
+                            conf = round(float(obj.confidence), 2)
                             threat_events.append(
                                 ThreatEvent(
                                     threat_type=ThreatType.THEFT,
-                                    confidence=0.75,
+                                    confidence=conf,
                                     description_en=f"Possible object taking interaction with {obj.label}",
                                     bounding_box=pbox,
                                 )
                             )
+                            if specific_threat != ThreatType.THEFT:
+                                threat_events.append(
+                                    ThreatEvent(
+                                        threat_type=specific_threat,
+                                        confidence=conf,
+                                        description_en=f"Possible {specific_threat.value} with {obj.label}",
+                                        bounding_box=pbox,
+                                    )
+                                )
                             break
 
         return detected_objects, threat_events

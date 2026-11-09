@@ -76,6 +76,45 @@ class ThreatDetectorTestCase(unittest.TestCase):
         self.assertIn(ThreatType.KNIFE_THREAT, threat_types)
         self.assertIn(ThreatType.THEFT, threat_types)
 
+    def test_visual_flame_detection_fallback(self):
+        detector = ThreatAndObjectDetector()
+        # Synthetic flame frame: dark background with a bright orange/red flame spot
+        flame_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        # BGR (20, 120, 255) -> intense orange-red flame
+        flame_frame[30:70, 30:70] = (20, 120, 255)
+
+        flames = detector.detect_flame_regions(flame_frame)
+        self.assertGreater(len(flames), 0)
+        bbox, conf = flames[0]
+        self.assertGreaterEqual(conf, 0.70)
+        self.assertGreaterEqual(bbox.x2 - bbox.x1, 20)
+
+        # evaluate_detections with no raw detections should auto-detect fire via visual flame analysis
+        objects, threats = detector.evaluate_detections([], frame_bgr=flame_frame)
+        self.assertTrue(any(o.label == "fire" for o in objects))
+        self.assertTrue(any(t.threat_type == ThreatType.FIRE_SMOKE for t in threats))
+
+    def test_detect_motorcycle_phone_and_firearms(self):
+        detector = ThreatAndObjectDetector()
+        raw_dets = [
+            {"label": "pistol", "confidence": 0.92, "x1": 10, "y1": 10, "x2": 30, "y2": 30},
+            {"label": "motorcycle", "confidence": 0.88, "x1": 50, "y1": 50, "x2": 150, "y2": 150},
+            {"label": "cell phone", "confidence": 0.85, "x1": 20, "y1": 20, "x2": 35, "y2": 35},
+            {"label": "hamburger", "confidence": 0.78, "x1": 40, "y1": 40, "x2": 60, "y2": 60},
+        ]
+        person_boxes = [BoundingBox(x1=15, y1=15, x2=80, y2=80)]
+
+        objects, threats = detector.evaluate_detections(raw_dets, person_boxes=person_boxes)
+        labels = [o.label for o in objects]
+        self.assertIn("motorcycle", labels)
+        self.assertIn("cell phone", labels)
+        self.assertIn("hamburger", labels)
+        self.assertIn("pistol", labels)
+
+        threat_types = [t.threat_type for t in threats]
+        self.assertIn(ThreatType.WEAPON_DRAWN, threat_types)
+        self.assertIn(ThreatType.ROBBERY_PHONE, threat_types)
+
     def test_detect_hat_and_food_items(self):
         detector = ThreatAndObjectDetector()
         raw_dets = [
@@ -173,6 +212,59 @@ class FrameIndexerServiceTestCase(unittest.TestCase):
         self.assertEqual(len(threats), 1)
         self.assertEqual(threats[0]["threat_type"], "knife_threat")
         self.assertEqual(threats[0]["snapshot_path"], vf["frame_path"])
+
+        # Check security_events
+        events = self.connection.execute("SELECT * FROM security_events WHERE session_or_video_id = ?", ("session_01",)).fetchall()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_type"], "knife_present")
+        self.assertEqual(events[0]["primary_frame_id"], frame_id)
+        self.assertGreater(events[0]["confidence"], 0.0)
+        self.assertEqual(events[0]["snapshot_path"], vf["frame_path"])
+
+    def test_index_frame_saves_motorbike_and_robbery(self):
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        analysis = FrameAnalysis(
+            frame_index=2,
+            timestamp_seconds=5.0,
+            width=100,
+            height=100,
+            tracks=(
+                TrackAnalysis(
+                    track_id=2,
+                    bounding_box=BoundingBox(20, 20, 60, 80),
+                    person_confidence=0.91,
+                    status=DetectionStatus.KNOWN,
+                    member_id=None,
+                    similarity=0.88,
+                    face_confidence=0.90,
+                ),
+            ),
+        )
+        raw_objects = [
+            {"label": "motorcycle", "confidence": 0.89, "x1": 25, "y1": 30, "x2": 70, "y2": 90},
+            {"label": "backpack", "confidence": 0.85, "x1": 22, "y1": 25, "x2": 45, "y2": 55},
+        ]
+
+        frame_id = self.service.index_frame(
+            frame_bgr=frame,
+            camera_id=self.camera_id,
+            session_or_video_id="session_02",
+            timestamp_seconds=5.0,
+            frame_number=2,
+            analysis=analysis,
+            raw_object_detections=raw_objects,
+        )
+
+        entities = self.connection.execute("SELECT * FROM detected_entities WHERE frame_id = ?", (frame_id,)).fetchall()
+        labels = {r["label"] for r in entities}
+        self.assertIn("motorcycle", labels)
+        self.assertIn("backpack", labels)
+
+        threats = self.connection.execute("SELECT * FROM danger_threats WHERE frame_id = ?", (frame_id,)).fetchall()
+        threat_types = {r["threat_type"] for r in threats}
+        self.assertTrue(ThreatType.ROBBERY_BACKPACK in threat_types or ThreatType.THEFT in threat_types)
+        for t in threats:
+            self.assertGreater(t["confidence"], 0.0)
 
     def test_frame_without_image_does_not_create_snapshot_directory(self):
         self.assertFalse(self.service.snapshots_dir.exists())

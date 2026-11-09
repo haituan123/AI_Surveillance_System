@@ -88,6 +88,55 @@ def _migrate_video_frames_null_camera(connection: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_danger_threats_types(connection: sqlite3.Connection) -> None:
+    """Migrate danger_threats CHECK constraint to include new threat types."""
+    try:
+        row = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='danger_threats'"
+        ).fetchone()
+        if not row or not row[0]:
+            return
+        sql = row[0]
+        if "fighting" in sql:
+            return
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute(
+            """
+            CREATE TABLE danger_threats_migrated (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                frame_id INTEGER NOT NULL,
+                threat_type TEXT NOT NULL CHECK(threat_type IN (
+                    'knife_threat', 'weapon_drawn', 'fire_smoke', 'theft', 'violence',
+                    'fighting', 'robbery_backpack', 'robbery_phone', 'robbery_motorbike', 'shooting'
+                )),
+                confidence REAL NOT NULL,
+                snapshot_path TEXT NOT NULL,
+                description_en TEXT,
+                bbox_json TEXT,
+                is_resolved INTEGER NOT NULL DEFAULT 0 CHECK(is_resolved IN (0, 1)),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(frame_id) REFERENCES video_frames(id) ON DELETE CASCADE
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO danger_threats_migrated (
+                id, frame_id, threat_type, confidence, snapshot_path, description_en, bbox_json, is_resolved, created_at
+            )
+            SELECT id, frame_id, threat_type, confidence, snapshot_path, description_en, bbox_json, is_resolved, created_at
+            FROM danger_threats
+            """
+        )
+        connection.execute("DROP TABLE danger_threats")
+        connection.execute("ALTER TABLE danger_threats_migrated RENAME TO danger_threats")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_danger_threats_type ON danger_threats(threat_type, created_at DESC)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_danger_threats_frame ON danger_threats(frame_id)")
+        connection.execute("PRAGMA foreign_keys = ON")
+    except Exception:
+        pass
+
+
 def _ensure_column(
     connection: sqlite3.Connection,
     table_name: str,
@@ -326,7 +375,8 @@ def create_schema(connection: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             frame_id INTEGER NOT NULL,
             threat_type TEXT NOT NULL CHECK(threat_type IN (
-                'knife_threat', 'weapon_drawn', 'fire_smoke', 'theft', 'violence'
+                'knife_threat', 'weapon_drawn', 'fire_smoke', 'theft', 'violence',
+                'fighting', 'robbery_backpack', 'robbery_phone', 'robbery_motorbike', 'shooting'
             )),
             confidence REAL NOT NULL,
             snapshot_path TEXT NOT NULL,
@@ -338,6 +388,7 @@ def create_schema(connection: sqlite3.Connection) -> None:
         )
         """
     )
+    _migrate_danger_threats_types(connection)
 
     connection.execute(
         """
