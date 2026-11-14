@@ -5,6 +5,7 @@ import shutil
 import sqlite3
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -170,12 +171,16 @@ class QAService:
         for msg in message_rows:
             evidence_rows = self.connection.execute(
                 """
-                SELECT id, message_id, frame_id, start_timestamp, end_timestamp,
-                       snapshot_path, highlight_bbox_json, explanation_vi,
-                       event_type, detected_label, confidence
-                FROM qa_evidences
-                WHERE message_id = ?
-                ORDER BY start_timestamp ASC
+                SELECT qe.id, qe.message_id, qe.frame_id,
+                       qe.start_timestamp, qe.end_timestamp,
+                       qe.snapshot_path, qe.highlight_bbox_json,
+                       qe.explanation_vi, qe.event_type, qe.detected_label,
+                       qe.confidence,
+                       vf.session_or_video_id AS source_video_id
+                FROM qa_evidences qe
+                LEFT JOIN video_frames vf ON vf.id = qe.frame_id
+                WHERE qe.message_id = ?
+                ORDER BY qe.start_timestamp ASC
                 """,
                 (msg["id"],),
             ).fetchall()
@@ -197,6 +202,7 @@ class QAService:
                         if e["confidence"] is not None
                         else None
                     ),
+                    source_video_id=e["source_video_id"],
                 )
                 for e in evidence_rows
             ]
@@ -245,17 +251,91 @@ class QAService:
             conv = self.create_conversation(title=request.question[:40] + ("..." if len(request.question) > 40 else ""))
             conv_id = conv.id
 
-        # 1. Trích xuất ngữ cảnh video/camera từ Database
-        context_data = self._gather_surveillance_context(
-            camera_id=request.camera_id,
-            session_or_video_id=request.session_or_video_id,
-        )
+        scoped_videos: list[dict[str, str]] = []
+        if request.session_or_video_ids is not None:
+            requested_ids = list(dict.fromkeys(request.session_or_video_ids))
+            if any(not video_id.strip() for video_id in requested_ids):
+                raise ValueError("Video scope contains an invalid ID")
+            if requested_ids:
+                rows = self.connection.execute(
+                    "SELECT video_id, filename FROM qa_uploaded_videos "
+                    "WHERE conversation_id = ? AND video_id IN ("
+                    + ",".join("?" for _ in requested_ids)
+                    + ")",
+                    [conv_id, *requested_ids],
+                ).fetchall()
+                owned_ids = {str(row["video_id"]) for row in rows}
+                if owned_ids != set(requested_ids):
+                    raise ValueError(
+                        "One or more selected videos do not belong to this conversation"
+                    )
+                rows_by_id = {str(row["video_id"]): row for row in rows}
+                filename_counts: dict[str, int] = {}
+                filename_totals: dict[str, int] = {}
+                for video_id in requested_ids:
+                    filename = str(rows_by_id[video_id]["filename"])
+                    filename_totals[filename] = filename_totals.get(filename, 0) + 1
+                for video_id in requested_ids:
+                    filename = str(rows_by_id[video_id]["filename"])
+                    filename_counts[filename] = filename_counts.get(filename, 0) + 1
+                    suffix = (
+                        f" ({filename_counts[filename]})"
+                        if filename_totals[filename] > 1
+                        else ""
+                    )
+                    scoped_videos.append(
+                        {"video_id": video_id, "label": filename + suffix}
+                    )
 
-        # 2. Suy luận bằng Gemini API (hoặc fallback nếu chưa cấu hình key)
-        qa_result = self._reason_with_gemini(
-            user_question=request.question,
-            context_data=context_data,
-        )
+        if scoped_videos:
+            # Keep each video's evidence isolated. A single merged prompt lets the
+            # model answer from only the strongest matching video and silently
+            # omit the others, even though every selected ID was queried.
+            video_contexts = [
+                (
+                    video,
+                    self._gather_surveillance_context(
+                        camera_id=request.camera_id,
+                        session_or_video_id=video["video_id"],
+                    ),
+                )
+                for video in scoped_videos
+            ]
+            worker_count = min(4, len(video_contexts))
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = [
+                    executor.submit(
+                        self._reason_with_gemini,
+                        request.question,
+                        video_context,
+                    )
+                    for _, video_context in video_contexts
+                ]
+                video_results = [future.result() for future in futures]
+
+            context_data = {
+                key: [
+                    item
+                    for _, video_context in video_contexts
+                    for item in video_context.get(key, [])
+                ]
+                for key in ("entities", "threats", "security_events", "alerts")
+            }
+            qa_result = self._combine_video_qa_results(
+                video_contexts=video_contexts,
+                video_results=video_results,
+            )
+        else:
+            # Single-video/camera questions retain their original one-pass path.
+            context_data = self._gather_surveillance_context(
+                camera_id=request.camera_id,
+                session_or_video_id=request.session_or_video_id,
+                session_or_video_ids=request.session_or_video_ids,
+            )
+            qa_result = self._reason_with_gemini(
+                user_question=request.question,
+                context_data=context_data,
+            )
 
         returned_evidences = qa_result.get("evidences", [])
         provenance, threat_ids_by_path = self._context_snapshot_provenance(context_data) if returned_evidences else ({}, {})
@@ -286,7 +366,31 @@ class QAService:
 
             # 4. Lưu Evidences
             saved_evidences: list[QAEvidence] = []
-            for ev in self._revalidate_evidences(returned_evidences, provenance, threat_ids_by_path, request):
+            valid_evidences = self._revalidate_evidences(
+                returned_evidences,
+                provenance,
+                threat_ids_by_path,
+                request,
+            )
+            frame_ids = {
+                ev.get("frame_id")
+                for ev in valid_evidences
+                if type(ev.get("frame_id")) is int
+            }
+            frame_sources: dict[int, str] = {}
+            if frame_ids:
+                rows = self.connection.execute(
+                    "SELECT id, session_or_video_id FROM video_frames WHERE id IN ("
+                    + ",".join("?" for _ in frame_ids)
+                    + ")",
+                    list(frame_ids),
+                ).fetchall()
+                frame_sources = {
+                    int(row["id"]): str(row["session_or_video_id"])
+                    for row in rows
+                }
+
+            for ev in valid_evidences:
                 start_ts = float(ev.get("start_timestamp", 0.0))
                 end_ts = float(ev.get("end_timestamp", start_ts))
                 snapshot = ev.get("snapshot_path") or ""
@@ -335,6 +439,7 @@ class QAService:
                         event_type=event_type,
                         detected_label=detected_label,
                         confidence=confidence,
+                        source_video_id=frame_sources.get(frame_id),
                     )
                 )
 
@@ -349,6 +454,47 @@ class QAService:
             created_at="vừa xong",
             evidences=saved_evidences,
         )
+
+    def _combine_video_qa_results(
+        self,
+        video_contexts: list[tuple[dict[str, str], dict[str, Any]]],
+        video_results: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Build an explicit, ordered answer for every selected video."""
+        response_lines = ["Kết quả theo từng video:"]
+        reasoning_parts: list[str] = []
+        evidences: list[dict[str, Any]] = []
+        translated_query = ""
+        question_type: str | QAQuestionType = QAQuestionType.GENERAL
+
+        for (video, _), result in zip(video_contexts, video_results):
+            label = video["label"]
+            response = str(result.get("response_vi") or "").strip()
+            if not response:
+                response = "Không tìm thấy kết luận phù hợp trong dữ liệu đã phân tích."
+            response_lines.append(f"• {label}: {response}")
+
+            reasoning = str(result.get("reasoning_en") or "").strip()
+            if reasoning:
+                reasoning_parts.append(f"[{label}] {reasoning}")
+
+            if not translated_query:
+                translated_query = str(result.get("translated_query_en") or "")
+            result_type = result.get("question_type", QAQuestionType.GENERAL)
+            if question_type == QAQuestionType.GENERAL and result_type != QAQuestionType.GENERAL:
+                question_type = result_type
+
+            for evidence in result.get("evidences", []) or []:
+                if isinstance(evidence, dict):
+                    evidences.append(evidence)
+
+        return {
+            "translated_query_en": translated_query,
+            "question_type": question_type,
+            "reasoning_en": "\n".join(reasoning_parts),
+            "response_vi": "\n".join(response_lines),
+            "evidences": evidences,
+        }
 
     def _canonical_snapshot_path(self, stored_path: str) -> Path | None:
         """Resolve an untrusted snapshot reference without failing unrelated work."""
@@ -415,6 +561,16 @@ class QAService:
             if request.session_or_video_id is not None:
                 conditions.append("session_or_video_id = ?")
                 parameters.append(request.session_or_video_id)
+            elif request.session_or_video_ids is not None:
+                if request.session_or_video_ids:
+                    conditions.append(
+                        "session_or_video_id IN ("
+                        + ",".join("?" for _ in request.session_or_video_ids)
+                        + ")"
+                    )
+                    parameters.extend(request.session_or_video_ids)
+                else:
+                    conditions.append("1 = 0")
             if request.camera_id is not None:
                 conditions.append("camera_id = ?")
                 parameters.append(request.camera_id)
@@ -475,6 +631,7 @@ class QAService:
         self,
         camera_id: int | None,
         session_or_video_id: str | None,
+        session_or_video_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Collect entities, threats, logs, and member names for the LLM prompt context."""
         query_parts = []
@@ -486,13 +643,24 @@ class QAService:
         if session_or_video_id is not None:
             query_parts.append("vf.session_or_video_id = ?")
             params.append(session_or_video_id)
+        elif session_or_video_ids is not None:
+            if session_or_video_ids:
+                query_parts.append(
+                    "vf.session_or_video_id IN ("
+                    + ",".join("?" for _ in session_or_video_ids)
+                    + ")"
+                )
+                params.extend(session_or_video_ids)
+            else:
+                query_parts.append("1 = 0")
 
         where_clause = f"WHERE {' AND '.join(query_parts)}" if query_parts else ""
 
         # Lấy frames & entities
         entity_sql = f"""
             SELECT 
-                vf.id as frame_id, vf.timestamp_seconds, vf.frame_number, vf.frame_path,
+                vf.id as frame_id, vf.session_or_video_id,
+                vf.timestamp_seconds, vf.frame_number, vf.frame_path,
                 vf.person_count, vf.scene_caption_en,
                 de.label, de.entity_type, de.clothing_top_color, de.clothing_bottom_color,
                 de.accessories_json, de.movement_direction, de.action_label, de.bbox_json,
@@ -512,7 +680,7 @@ class QAService:
             SELECT dt.id AS threat_id, vf.id AS frame_id,
                    dt.threat_type, dt.confidence, dt.snapshot_path,
                    dt.description_en, dt.bbox_json,
-                   vf.timestamp_seconds
+                   vf.session_or_video_id, vf.timestamp_seconds
             FROM danger_threats dt
             JOIN video_frames vf ON dt.frame_id = vf.id
             {where_clause}
@@ -529,6 +697,16 @@ class QAService:
         if session_or_video_id is not None:
             event_conditions.append("se.session_or_video_id = ?")
             event_params.append(session_or_video_id)
+        elif session_or_video_ids is not None:
+            if session_or_video_ids:
+                event_conditions.append(
+                    "se.session_or_video_id IN ("
+                    + ",".join("?" for _ in session_or_video_ids)
+                    + ")"
+                )
+                event_params.extend(session_or_video_ids)
+            else:
+                event_conditions.append("1 = 0")
         event_where = (
             f"WHERE {' AND '.join(event_conditions)}"
             if event_conditions
@@ -551,15 +729,18 @@ class QAService:
         ).fetchall()
 
         # Lấy alerts
-        alerts = self.connection.execute(
-            """
-            SELECT a.alert_type, a.message, a.confidence, a.created_at, p.name as member_name
-            FROM alerts a
-            LEFT JOIN people p ON a.member_id = p.id
-            ORDER BY a.created_at DESC
-            LIMIT 20
-            """
-        ).fetchall()
+        alerts = []
+        if session_or_video_id is None and session_or_video_ids is None:
+            alerts = self.connection.execute(
+                """
+                SELECT a.alert_type, a.message, a.confidence, a.created_at,
+                       p.name as member_name
+                FROM alerts a
+                LEFT JOIN people p ON a.member_id = p.id
+                ORDER BY a.created_at DESC
+                LIMIT 20
+                """
+            ).fetchall()
 
         return {
             "entities": [dict(r) for r in entities],
@@ -1340,6 +1521,21 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
 
     def get_uploaded_video_status(self, video_id: str) -> QAUploadedVideo:
         return self._get_uploaded_video(video_id)
+
+    def get_uploaded_video_path(self, video_id: str) -> Path:
+        row = self.connection.execute(
+            "SELECT file_path FROM qa_uploaded_videos WHERE video_id = ?",
+            (video_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Uploaded video '{video_id}' not found")
+        try:
+            path = self._cleanup_path(str(row["file_path"]), self.uploads_dir)
+        except QAVideoCleanupError as exc:
+            raise ValueError("Uploaded video is unavailable") from exc
+        if not path.is_file():
+            raise ValueError("Uploaded video file not found")
+        return path
 
     def delete_uploaded_video(self, video_id: str) -> None:
         with self.index_manager.lifecycle_lock:

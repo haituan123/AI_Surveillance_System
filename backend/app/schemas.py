@@ -301,6 +301,7 @@ class QAAskRequest(BaseModel):
     conversation_id: int | None = None
     camera_id: int | None = None
     session_or_video_id: str | None = None
+    session_or_video_ids: list[str] | None = Field(default=None, max_length=16)
 
 
 class QAEvidence(BaseModel):
@@ -315,6 +316,7 @@ class QAEvidence(BaseModel):
     event_type: str | None = None
     detected_label: str | None = None
     confidence: float | None = None
+    source_video_id: str | None = None
 
 
 class QAMessage(BaseModel):

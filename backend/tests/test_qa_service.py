@@ -173,6 +173,59 @@ class QAServiceTestCase(unittest.TestCase):
         self.assertEqual(len(convs), 1)
         self.assertEqual(convs[0].id, conv.id)
 
+    def test_multi_video_question_returns_an_explicit_answer_for_each_video(self):
+        conversation = self.service.create_conversation("All videos")
+        self.connection.execute(
+            """
+            INSERT INTO video_frames (
+                camera_id, session_or_video_id, timestamp_seconds,
+                frame_number, frame_path
+            )
+            VALUES (?, 'video_02', 2.0, 2, ?)
+            """,
+            (self.camera_id, str(self.frame_snapshot)),
+        )
+        for video_id in ("video_01", "video_02"):
+            self.connection.execute(
+                """
+                INSERT INTO qa_uploaded_videos (
+                    conversation_id, video_id, filename, file_path, status
+                )
+                VALUES (?, ?, 'camera.mp4', ?, 'completed')
+                """,
+                (conversation.id, video_id, str(self.uploads / f"{video_id}.mp4")),
+            )
+        self.connection.commit()
+
+        def reason_for_one_video(_question, context):
+            source = context["entities"][0]["session_or_video_id"]
+            return {
+                "translated_query_en": "What happened?",
+                "reasoning_en": f"Checked {source}",
+                "response_vi": f"Đã kiểm tra {source}",
+                "question_type": "general",
+                "evidences": [],
+            }
+
+        with patch.object(
+            self.service,
+            "_reason_with_gemini",
+            side_effect=reason_for_one_video,
+        ) as reason:
+            message = self.service.ask(
+                QAAskRequest(
+                    question="Có gì xảy ra?",
+                    conversation_id=conversation.id,
+                    session_or_video_ids=["video_01", "video_02"],
+                )
+            )
+
+        self.assertEqual(reason.call_count, 2)
+        self.assertIn("camera.mp4 (1): Đã kiểm tra video_01", message.response_vi)
+        self.assertIn("camera.mp4 (2): Đã kiểm tra video_02", message.response_vi)
+        self.assertIn("[camera.mp4 (1)] Checked video_01", message.reasoning_en)
+        self.assertIn("[camera.mp4 (2)] Checked video_02", message.reasoning_en)
+
     def test_ask_object_taking_question_generates_evidence(self):
         req = QAAskRequest(question="Có ai lấy chiếc balo trên bàn không?")
         msg = self.service.ask(req)
@@ -1087,6 +1140,64 @@ class QARoutesTestCase(unittest.TestCase):
 
     def test_missing_uploaded_video_still_returns_404(self):
         self.assertEqual(self.client.delete("/qa/videos/missing").status_code, 404)
+        self.assertEqual(self.client.get("/qa/videos/missing/content").status_code, 404)
+
+    def test_uploaded_video_content_is_streamed_from_managed_storage(self):
+        conversation = self.service.create_conversation("Playback")
+        video_path = self.uploads / "playback.mp4"
+        video_path.write_bytes(b"test-video-bytes")
+        self.connection.execute(
+            """
+            INSERT INTO qa_uploaded_videos (
+                conversation_id, video_id, filename, file_path, status
+            )
+            VALUES (?, 'qa_playback', 'playback.mp4', ?, 'completed')
+            """,
+            (conversation.id, str(video_path)),
+        )
+        self.connection.commit()
+
+        response = self.client.get("/qa/videos/qa_playback/content")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"test-video-bytes")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.headers["content-type"], "video/mp4")
+
+    def test_multi_video_scope_is_limited_to_the_current_conversation(self):
+        first = self.service.create_conversation("First")
+        second = self.service.create_conversation("Second")
+        for conversation_id, video_id in (
+            (first.id, "qa_first"),
+            (second.id, "qa_second"),
+        ):
+            self.connection.execute(
+                """
+                INSERT INTO qa_uploaded_videos (
+                    conversation_id, video_id, filename, file_path, status
+                )
+                VALUES (?, ?, ?, ?, 'completed')
+                """,
+                (
+                    conversation_id,
+                    video_id,
+                    f"{video_id}.mp4",
+                    str(self.uploads / f"{video_id}.mp4"),
+                ),
+            )
+        self.connection.commit()
+
+        response = self.client.post(
+            "/qa/ask",
+            json={
+                "question": "Có gì trong các video?",
+                "conversation_id": first.id,
+                "session_or_video_ids": ["qa_first", "qa_second"],
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("do not belong", response.json()["detail"])
 
     def test_app_shutdown_stops_all_managers(self):
         with (

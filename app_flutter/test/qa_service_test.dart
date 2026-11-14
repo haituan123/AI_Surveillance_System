@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:app_flutter/services/qa_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,57 @@ const _uploadedVideoResponse =
     '"completed_at":null}';
 
 void main() {
+  test(
+    'askQuestion sends bounded multi-video scope and parses evidence source',
+    () async {
+      late http.Request capturedRequest;
+      final client = MockClient((request) async {
+        capturedRequest = request;
+        return http.Response.bytes(
+          utf8.encode(
+            jsonEncode({
+              'id': 9,
+              'conversation_id': 7,
+              'user_query_vi': 'Ai xuất hiện?',
+              'translated_query_en': 'Who appears?',
+              'response_vi': 'Có một người.',
+              'question_type': 'identity',
+              'created_at': 'now',
+              'evidences': [
+                {
+                  'id': 11,
+                  'message_id': 9,
+                  'frame_id': 3,
+                  'start_timestamp': 4.0,
+                  'end_timestamp': 4.0,
+                  'snapshot_path': 'snapshot.jpg',
+                  'source_video_id': 'video-2',
+                },
+              ],
+            }),
+          ),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      final service = QAService(client: client, baseUrl: 'http://backend.test');
+
+      final answer = await service.askQuestion(
+        question: 'Ai xuất hiện?',
+        conversationId: 7,
+        sessionOrVideoIds: const ['video-1', 'video-2'],
+      );
+
+      final body = jsonDecode(capturedRequest.body) as Map<String, dynamic>;
+      expect(body['session_or_video_ids'], ['video-1', 'video-2']);
+      expect(answer.evidences.single.sourceVideoId, 'video-2');
+      expect(
+        service.videoContentUrl('video-2'),
+        'http://backend.test/qa/videos/video-2/content',
+      );
+    },
+  );
+
   test('uploadVideo uploads browser-provided bytes', () async {
     late http.Request capturedRequest;
     final client = MockClient((request) async {

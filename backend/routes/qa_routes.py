@@ -1,3 +1,4 @@
+import mimetypes
 import shutil
 import sqlite3
 from pathlib import Path
@@ -201,6 +202,29 @@ def get_video_status(
         ) from exc
 
 
+@router.get(
+    "/videos/{video_id}/content",
+    summary="Stream an uploaded Q&A video for in-app review",
+)
+def get_video_content(
+    video_id: str,
+    service: QAService = Depends(get_qa_service),
+):
+    try:
+        path = service.get_uploaded_video_path(video_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=media_type,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @router.delete(
     "/videos/{video_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -259,6 +283,11 @@ def ask_question(
 ) -> QAMessage:
     try:
         return service.ask(payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
