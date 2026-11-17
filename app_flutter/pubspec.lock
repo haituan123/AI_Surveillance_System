@@ -220,23 +220,7 @@ packages:
       sha256: "1741988757a65eb6b36abe716829688cf01910bbf91c34354ff7ec1c3de2b349"
       url: "https://pub.dev"
     source: hosted
-    version: "1.17.0"
-  package_info_plus:
-    dependency: transitive
-    description:
-      name: package_info_plus
-      sha256: "468c26b4254ab01979fa5e4a98cb343ea3631b9acee6f21028997419a80e1a20"
-      url: "https://pub.dev"
-    source: hosted
-    version: "9.0.1"
-  package_info_plus_platform_interface:
-    dependency: transitive
-    description:
-      name: package_info_plus_platform_interface
-      sha256: "202a487f08836a592a6bd4f901ac69b3a8f146af552bbd14407b6b41e1c3f086"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.2.1"
+    version: "1.18.0"
   path:
     dependency: transitive
     description:

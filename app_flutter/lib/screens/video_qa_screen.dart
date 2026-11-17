@@ -1040,95 +1040,134 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
           ),
           const SizedBox(height: 6),
 
-              // Snapshot Image Thumbnail
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadii.sm),
-                child: hasImage
-                    ? Image.network(
-                        imageUrl,
-                        height: 110,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          height: 110,
-                          color: Colors.grey.shade300,
-                          child: Center(
-                            child: Icon(Icons.broken_image, color: Colors.grey),
-                          ),
-                        ),
-                      )
-                    : Container(
-                        height: 110,
-                        color: Colors.grey.shade200,
-                        child: Center(
-                          child: Icon(Icons.videocam, color: Colors.grey),
-                        ),
+          // Snapshot Image Thumbnail
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+            child: hasImage
+                ? Image.network(
+                    imageUrl,
+                    height: 110,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      height: 110,
+                      color: Colors.grey.shade300,
+                      child: Center(
+                        child: Icon(Icons.broken_image, color: Colors.grey),
                       ),
-              ),
-              if (ev.explanation != null && ev.explanation!.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  ev.explanation!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-                ),
-              ],
-              if (ev.eventType != null || ev.confidence != null) ...[
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    if (ev.eventType != null)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          ev.eventType!.replaceAll('_', ' '),
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ),
-                    if (ev.detectedLabel != null)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          ev.detectedLabel!.replaceAll('_', ' '),
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ),
-                    if (ev.confidence != null)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          'Confidence ${(ev.confidence! * 100).toStringAsFixed(1)}%',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(
-                    Icons.play_circle_outline,
-                    size: 14,
-                    color: AppColors.teal,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Mở video tại ${ev.formattedTimeRange}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.teal,
-                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                : Container(
+                    height: 110,
+                    color: Colors.grey.shade200,
+                    child: Center(
+                      child: Icon(Icons.videocam, color: Colors.grey),
                     ),
                   ),
-                ],
+          ),
+          if (ev.explanation != null && ev.explanation!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              ev.explanation!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+            ),
+          ],
+          if (ev.eventType != null || ev.confidence != null) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                if (ev.eventType != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _eventSeverityColor(ev.eventType).withAlpha(35),
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(
+                        color: _eventSeverityColor(ev.eventType).withAlpha(80),
+                      ),
+                    ),
+                    child: Text(
+                      ev.eventType!.replaceAll('_', ' ').toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: _eventSeverityColor(ev.eventType),
+                      ),
+                    ),
+                  ),
+                if (ev.detectedLabel != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.tealSoft,
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                    ),
+                    child: Text(
+                      ev.detectedLabel!.replaceAll('_', ' '),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.tealDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                if (ev.confidence != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _confidenceColor(ev.confidence!).withAlpha(30),
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(
+                        color: _confidenceColor(ev.confidence!).withAlpha(80),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.verified,
+                          size: 11,
+                          color: _confidenceColor(ev.confidence!),
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          'Độ tin cậy ${(ev.confidence! * 100).toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: _confidenceColor(ev.confidence!),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                Icons.play_circle_outline,
+                size: 14,
+                color: AppColors.teal,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Mở video tại ${ev.formattedTimeRange}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.teal,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
