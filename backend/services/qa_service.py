@@ -379,6 +379,12 @@ class QAService:
                 threat_id = row.get("threat_id")
                 if source == "threats" and type(threat_id) is int:
                     threat_ids_by_path.setdefault(path, set()).add(threat_id)
+
+        for event in context.get("security_events", []):
+            frame_id = event.get("primary_frame_id")
+            path = self._canonical_snapshot_path(event.get("snapshot_path"))
+            if path is not None and type(frame_id) is int:
+                provenance.setdefault(path, set()).add(frame_id)
         return provenance, threat_ids_by_path
 
     def _revalidate_evidences(
@@ -435,6 +441,18 @@ class QAService:
                     path = self._canonical_snapshot_path(row["snapshot_path"])
                     if path is not None:
                         current_frames[row["frame_id"]].add(path)
+
+        if current_frames:
+            se_rows = self.connection.execute(
+                "SELECT primary_frame_id, snapshot_path FROM security_events WHERE primary_frame_id IN ("
+                + ",".join("?" for _ in current_frames.keys()) + ")", list(current_frames.keys())
+            ).fetchall()
+            for row in se_rows:
+                fid = row["primary_frame_id"]
+                if fid in current_frames:
+                    path = self._canonical_snapshot_path(row["snapshot_path"])
+                    if path is not None:
+                        current_frames[fid].add(path)
 
         valid = []
         for evidence, path, origins in candidates:
@@ -667,160 +685,494 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
             except (TypeError, json.JSONDecodeError):
                 return None
 
-        # 1. KIỂM TRA DAO / VŨ KHÍ / NGUY HIỂM (Threats)
-        if any(w in q_lower for w in ["dao", "vũ khí", "súng", "cháy", "nổ", "nguy hiểm", "đe dọa", "đánh nhau", "bạo lực", "cướp", "trộm", "giật"]):
-            requested_event_types: set[str] = set()
-            if "dao" in q_lower:
-                requested_event_types.update({"knife_present", "knife_threat"})
-            if any(w in q_lower for w in ["bắn", "bắn súng", "nổ súng"]):
-                requested_event_types.update({"shooting", "weapon_drawn", "weapon_present"})
-            if any(w in q_lower for w in ["súng", "vũ khí"]):
-                requested_event_types.update({"shooting", "weapon_present", "weapon_drawn", "knife_present", "knife_threat"})
-            if any(w in q_lower for w in ["cháy", "nổ"]):
-                requested_event_types.add("fire_smoke")
-            if any(w in q_lower for w in ["đánh nhau", "bạo lực"]):
-                requested_event_types.update({"fighting", "violence"})
-            if any(w in q_lower for w in ["cướp", "trộm", "giật"]):
-                requested_event_types.update({"possible_theft", "theft", "robbery_backpack", "robbery_phone", "robbery_motorbike"})
-            matching_event = next(
+        # 1. PHÂN LOẠI CÁC Ý ĐỊNH HỎI AN NINH / NGUY HIỂM / ĐỒ VẬT
+        is_asking_bike = any(w in q_lower for w in ["xe máy", "xe mô tô", "mô tô", "xe tay ga", "xe đạp", "xe cộ", "trộm xe", "cướp xe", "lấy xe", "dắt xe", "bẻ khóa", "motorcycle", "motorbike", "bicycle", "scooter"])
+        is_asking_phone = any(w in q_lower for w in ["điện thoại", "phone", "cell phone", "cướp điện thoại", "giật điện thoại", "trộm điện thoại"])
+        is_asking_bag = any(w in q_lower for w in ["balo", "ba lô", "túi xách", "túi", "cặp", "backpack", "handbag", "suitcase", "cướp balo", "giật balo", "trộm balo"])
+        is_asking_fighting = any(w in q_lower for w in ["đánh nhau", "ẩu đả", "xô xát", "bạo lực", "đánh người", "hành hung", "tấn công", "fighting", "violence"])
+        is_asking_fire = any(w in q_lower for w in ["cháy", "lửa", "cháy nổ", "khói", "bốc hỏa", "hỏa hoạn", "fire", "smoke"])
+        is_asking_weapon = any(w in q_lower for w in ["dao", "vũ khí", "súng", "bắn súng", "bắn", "nổ súng", "chém", "cầm dao", "cầm súng", "khí giới", "gun", "knife", "pistol", "rifle"])
+        is_asking_theft = any(w in q_lower for w in ["cướp", "trộm", "giật", "lấy trộm", "móc túi", "theft", "robbery"])
+        is_asking_general_threat = any(w in q_lower for w in ["nguy hiểm", "bất thường", "sự kiện an ninh", "đe dọa", "sự cố", "tình hình an ninh", "có gì nguy hiểm"])
+
+        # Mapping tên tiếng Việt dễ hiểu
+        evt_vn_map = {
+            "knife_present": "phát hiện dao",
+            "knife_threat": "đe dọa bằng dao",
+            "weapon_present": "phát hiện vũ khí/súng",
+            "weapon_drawn": "rút súng đe dọa",
+            "shooting": "bắn súng / nổ súng",
+            "fire_smoke": "cháy nổ / khói lửa",
+            "possible_theft": "nghi vấn trộm cắp",
+            "theft": "hành vi trộm cắp",
+            "robbery_backpack": "cướp giật balo",
+            "robbery_phone": "cướp giật điện thoại",
+            "robbery_motorbike": "cướp/trộm xe máy",
+            "violence": "hành vi bạo lực",
+            "fighting": "đánh nhau / ẩu đả",
+        }
+
+        # --- A. TRƯỜNG HỢP: HỎI VỀ XE MÁY / TRỘM XE MÁY ---
+        if is_asking_bike:
+            # 1. Tìm trong security_events
+            bike_event = next(
                 (
-                    event
-                    for event in security_events
-                    if not requested_event_types
-                    or event.get("event_type") in requested_event_types
+                    e for e in security_events
+                    if e.get("event_type") in ["robbery_motorbike", "possible_theft", "theft"]
+                    or any(b in str(e.get("object_labels_json", "")).lower() for b in ["motorcycle", "motorbike", "bicycle", "scooter", "bike"])
                 ),
                 None,
             )
-            if matching_event:
-                start_ts = float(matching_event.get("start_timestamp", 0.0))
-                end_ts = float(matching_event.get("end_timestamp", start_ts))
-                labels_raw = matching_event.get("object_labels_json")
-                try:
-                    labels = (
-                        json.loads(labels_raw)
-                        if isinstance(labels_raw, str)
-                        else labels_raw or []
-                    )
-                except (TypeError, json.JSONDecodeError):
-                    labels = []
-                detected_label = labels[0] if labels else None
-                evt_vn_map = {
-                    "knife_present": "phát hiện dao",
-                    "knife_threat": "đe dọa bằng dao",
-                    "weapon_present": "phát hiện vũ khí/súng",
-                    "weapon_drawn": "rút súng đe dọa",
-                    "shooting": "bắn súng / nổ súng",
-                    "fire_smoke": "cháy nổ / khói lửa",
-                    "possible_theft": "nghi vấn trộm cắp",
-                    "theft": "hành vi trộm cắp",
-                    "robbery_backpack": "cướp giật balo",
-                    "robbery_phone": "cướp giật điện thoại",
-                    "robbery_motorbike": "cướp xe máy",
-                    "violence": "hành vi bạo lực",
-                    "fighting": "đánh nhau / ẩu đả",
-                }
-                event_name_vi = evt_vn_map.get(matching_event['event_type'], matching_event['event_type'])
+            if bike_event:
+                start_ts = float(bike_event.get("start_timestamp", 0.0))
+                end_ts = float(bike_event.get("end_timestamp", start_ts))
+                ev_type = bike_event.get("event_type", "robbery_motorbike")
                 return {
-                    "translated_query_en": f"Find the recorded security event related to: {user_question}",
+                    "translated_query_en": f"Check for motorcycle theft or motorcycle presence: {user_question}",
                     "question_type": QAQuestionType.THREAT,
-                    "reasoning_en": (
-                        f"Found one deduplicated {matching_event['event_type']} event "
-                        f"from {start_ts:.2f}s to {end_ts:.2f}s."
-                    ),
-                    "response_vi": (
-                        f"Phát hiện sự kiện {event_name_vi} ({matching_event['event_type']}) từ "
-                        f"{start_ts:.2f}s đến {end_ts:.2f}s."
-                    ),
+                    "reasoning_en": f"Found confirmed motorcycle security event ({ev_type}) from {start_ts:.2f}s to {end_ts:.2f}s.",
+                    "response_vi": f"Phát hiện hành vi cướp/trộm xe máy ({evt_vn_map.get(ev_type, ev_type)}) từ {start_ts:.2f}s đến {end_ts:.2f}s.",
                     "evidences": [{
-                        "frame_id": matching_event.get("primary_frame_id"),
+                        "frame_id": bike_event.get("primary_frame_id"),
                         "start_timestamp": start_ts,
                         "end_timestamp": end_ts,
-                        "snapshot_path": matching_event.get("snapshot_path", ""),
-                        "highlight_bbox": parse_bbox(matching_event),
-                        "explanation_vi": (
-                            f"Sự kiện an ninh đã được xác nhận qua nhiều khung hình "
-                            f"({matching_event['event_type']})"
-                        ),
-                        "event_type": matching_event["event_type"],
-                        "detected_label": detected_label,
-                        "confidence": matching_event.get("confidence"),
+                        "snapshot_path": bike_event.get("snapshot_path", ""),
+                        "highlight_bbox": parse_bbox(bike_event),
+                        "explanation_vi": f"Ghi nhận hành vi cướp/trộm xe máy ({ev_type})",
+                        "event_type": ev_type,
+                        "detected_label": "motorcycle",
+                        "confidence": bike_event.get("confidence"),
                     }],
                 }
-            threat_type_alias_map = {
-                "knife_present": "knife_threat",
-                "knife_threat": "knife_threat",
-                "weapon_present": "weapon_drawn",
-                "weapon_drawn": "weapon_drawn",
-                "shooting": "shooting",
-                "fire_smoke": "fire_smoke",
-                "possible_theft": "theft",
-                "theft": "theft",
-                "robbery_backpack": "robbery_backpack",
-                "robbery_phone": "robbery_phone",
-                "robbery_motorbike": "robbery_motorbike",
-                "violence": "violence",
-                "fighting": "fighting",
-            }
-            requested_threat_types = {
-                threat_type_alias_map[event_type]
-                for event_type in requested_event_types
-                if event_type in threat_type_alias_map
-            }
-            # Also allow fallback to generic theft / violence if specific threat type matches
-            if any(t in requested_threat_types for t in ["robbery_backpack", "robbery_phone", "robbery_motorbike"]):
-                requested_threat_types.add("theft")
-            if "fighting" in requested_threat_types:
-                requested_threat_types.add("violence")
-            matching_threat = next(
+
+            # 2. Tìm trong danger_threats
+            bike_threat = next(
                 (
-                    threat
-                    for threat in threats
-                    if threat["threat_type"]
-                    in (
-                        requested_threat_types
-                        or {
-                            "knife_threat",
-                            "weapon_drawn",
-                            "fire_smoke",
-                            "theft",
-                            "violence",
-                        }
-                    )
+                    t for t in threats
+                    if t.get("threat_type") in ["robbery_motorbike", "theft"]
+                    or any(b in str(t.get("description_en", "")).lower() for b in ["motorcycle", "motorbike", "bicycle", "bike", "scooter"])
                 ),
                 None,
             )
-            if matching_threat:
-                ts = matching_threat.get("timestamp_seconds", 0.0)
+            if bike_threat:
+                ts = float(bike_threat.get("timestamp_seconds", 0.0))
+                threat_type = bike_threat.get("threat_type", "robbery_motorbike")
                 return {
-                    "translated_query_en": f"Is there any weapon or dangerous threat in the video related to: {user_question}?",
+                    "translated_query_en": f"Check for motorcycle threat in danger threats: {user_question}",
                     "question_type": QAQuestionType.THREAT,
-                    "reasoning_en": f"Found danger threat record ({matching_threat['threat_type']}) at timestamp {ts:.2f}s.",
-                    "response_vi": f"Phát hiện cảnh báo nguy hiểm ({matching_threat['threat_type']}) tại mốc thời gian {ts:.2f}s.",
+                    "reasoning_en": f"Found danger threat of motorcycle taking ({threat_type}) at {ts:.2f}s.",
+                    "response_vi": f"Phát hiện dấu hiệu cướp/trộm xe máy ({threat_type}) tại mốc thời gian {ts:.2f}s.",
                     "evidences": [{
-                        "frame_id": matching_threat.get("frame_id"),
+                        "frame_id": bike_threat.get("frame_id"),
                         "start_timestamp": ts,
                         "end_timestamp": ts + 3.0,
-                        "snapshot_path": matching_threat.get("snapshot_path", ""),
+                        "snapshot_path": bike_threat.get("snapshot_path", ""),
                         "highlight_bbox": (
-                            json.loads(matching_threat["bbox_json"])
-                            if matching_threat.get("bbox_json")
-                            else None
+                            json.loads(bike_threat["bbox_json"]) if bike_threat.get("bbox_json") else None
                         ),
-                        "explanation_vi": f"Đối tượng cầm vũ khí/hành vi nguy hiểm ({matching_threat['threat_type']})",
-                        "event_type": matching_threat["threat_type"],
-                        "detected_label": (
-                            "knife"
-                            if matching_threat["threat_type"] == "knife_threat"
-                            else matching_threat["threat_type"]
-                        ),
-                        "confidence": matching_threat.get("confidence"),
+                        "explanation_vi": f"Dấu hiệu tương tác/cướp xe máy ({threat_type})",
+                        "event_type": threat_type,
+                        "detected_label": "motorcycle",
+                        "confidence": bike_threat.get("confidence"),
                     }],
                 }
+
+            # 3. Tìm xe máy xuất hiện trong detected_entities
+            bike_entity = next(
+                (
+                    ent for ent in entities
+                    if str(ent.get("label", "")).lower() in ["motorcycle", "motorbike", "scooter", "bicycle", "bike"]
+                ),
+                None,
+            )
+            if bike_entity:
+                ts = float(bike_entity.get("timestamp_seconds", 0.0))
+                raw_lbl = str(bike_entity.get("label", "motorcycle"))
+                conf = bike_entity.get("confidence")
+                return {
+                    "translated_query_en": f"Is there a motorcycle in the video: {user_question}",
+                    "question_type": QAQuestionType.OBJECT_REASONING,
+                    "reasoning_en": f"Found motorcycle entity ({raw_lbl}) at {ts:.2f}s.",
+                    "response_vi": f"Có. Phát hiện phương tiện xe máy ({raw_lbl}) xuất hiện trong video tại mốc {ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": bike_entity.get("frame_id"),
+                        "start_timestamp": ts,
+                        "end_timestamp": ts + 3.0,
+                        "snapshot_path": bike_entity.get("frame_path", ""),
+                        "highlight_bbox": parse_bbox(bike_entity),
+                        "explanation_vi": f"Phương tiện xe máy ({raw_lbl}) được nhận diện trong video",
+                        "event_type": "vehicle_presence",
+                        "detected_label": raw_lbl,
+                        "confidence": conf,
+                    }],
+                }
+
             return {
-                "translated_query_en": f"Check for weapons/threats: {user_question}",
+                "translated_query_en": f"Check for motorcycle: {user_question}",
+                "question_type": QAQuestionType.THREAT if is_asking_theft else QAQuestionType.OBJECT_REASONING,
+                "reasoning_en": "No motorcycle entity or motorcycle robbery events detected in context.",
+                "response_vi": "Không phát hiện hành vi trộm cướp xe hoặc phương tiện xe máy nào trong video.",
+                "evidences": [],
+            }
+
+        # --- B. TRƯỜNG HỢP: HỎI VỀ ĐÁNH NHAU / ẨU ĐẢ / BẠO LỰC ---
+        if is_asking_fighting:
+            fight_event = next(
+                (e for e in security_events if e.get("event_type") in ["fighting", "violence"]),
+                None,
+            )
+            if fight_event:
+                start_ts = float(fight_event.get("start_timestamp", 0.0))
+                end_ts = float(fight_event.get("end_timestamp", start_ts))
+                ev_type = fight_event.get("event_type", "fighting")
+                return {
+                    "translated_query_en": f"Is there any fighting or physical altercation: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found fighting security event ({ev_type}) from {start_ts:.2f}s to {end_ts:.2f}s.",
+                    "response_vi": f"Phát hiện hành vi đánh nhau / ẩu đả ({evt_vn_map.get(ev_type, ev_type)}) từ {start_ts:.2f}s đến {end_ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": fight_event.get("primary_frame_id"),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "snapshot_path": fight_event.get("snapshot_path", ""),
+                        "highlight_bbox": parse_bbox(fight_event),
+                        "explanation_vi": f"Sự kiện đánh nhau / ẩu đả được xác nhận qua ActionVerifier ({ev_type})",
+                        "event_type": ev_type,
+                        "detected_label": "person",
+                        "confidence": fight_event.get("confidence"),
+                    }],
+                }
+
+            fight_threat = next(
+                (t for t in threats if t.get("threat_type") in ["fighting", "violence"]),
+                None,
+            )
+            if fight_threat:
+                ts = float(fight_threat.get("timestamp_seconds", 0.0))
+                return {
+                    "translated_query_en": f"Check for physical altercation in threats: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found fighting threat at {ts:.2f}s.",
+                    "response_vi": f"Phát hiện dấu hiệu xô xát / đánh nhau tại mốc thời gian {ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": fight_threat.get("frame_id"),
+                        "start_timestamp": ts,
+                        "end_timestamp": ts + 3.0,
+                        "snapshot_path": fight_threat.get("snapshot_path", ""),
+                        "highlight_bbox": (
+                            json.loads(fight_threat["bbox_json"]) if fight_threat.get("bbox_json") else None
+                        ),
+                        "explanation_vi": f"Dấu hiệu đánh nhau / xô xát ({fight_threat.get('threat_type')})",
+                        "event_type": fight_threat.get("threat_type", "fighting"),
+                        "detected_label": "person",
+                        "confidence": fight_threat.get("confidence"),
+                    }],
+                }
+
+            return {
+                "translated_query_en": f"Check for fighting: {user_question}",
                 "question_type": QAQuestionType.THREAT,
-                "reasoning_en": "No weapon or active danger threats recorded in context.",
-                "response_vi": "Không phát hiện vũ khí hoặc hành vi nguy hiểm nào trong dữ liệu giám sát.",
+                "reasoning_en": "No fighting or physical violence detected in context.",
+                "response_vi": "Không phát hiện hành vi đánh nhau, ẩu đả hoặc bạo lực nào trong video.",
+                "evidences": [],
+            }
+
+        # --- C. TRƯỜNG HỢP: HỎI VỀ CƯỚP ĐIỆN THOẠI ---
+        if is_asking_phone and is_asking_theft:
+            phone_event = next(
+                (e for e in security_events if e.get("event_type") == "robbery_phone"),
+                None,
+            )
+            if phone_event:
+                start_ts = float(phone_event.get("start_timestamp", 0.0))
+                end_ts = float(phone_event.get("end_timestamp", start_ts))
+                return {
+                    "translated_query_en": f"Is there phone robbery: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found phone robbery event from {start_ts:.2f}s to {end_ts:.2f}s.",
+                    "response_vi": f"Phát hiện hành vi cướp giật điện thoại từ {start_ts:.2f}s đến {end_ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": phone_event.get("primary_frame_id"),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "snapshot_path": phone_event.get("snapshot_path", ""),
+                        "highlight_bbox": parse_bbox(phone_event),
+                        "explanation_vi": "Hành vi cướp giật điện thoại (robbery_phone)",
+                        "event_type": "robbery_phone",
+                        "detected_label": "cell phone",
+                        "confidence": phone_event.get("confidence"),
+                    }],
+                }
+
+            phone_threat = next(
+                (t for t in threats if t.get("threat_type") in ["robbery_phone", "theft"] and "phone" in str(t.get("description_en", "")).lower()),
+                None,
+            )
+            if phone_threat:
+                ts = float(phone_threat.get("timestamp_seconds", 0.0))
+                return {
+                    "translated_query_en": f"Check phone robbery threat: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found phone robbery threat at {ts:.2f}s.",
+                    "response_vi": f"Phát hiện dấu hiệu cướp giật điện thoại tại mốc {ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": phone_threat.get("frame_id"),
+                        "start_timestamp": ts,
+                        "end_timestamp": ts + 3.0,
+                        "snapshot_path": phone_threat.get("snapshot_path", ""),
+                        "highlight_bbox": json.loads(phone_threat["bbox_json"]) if phone_threat.get("bbox_json") else None,
+                        "explanation_vi": "Dấu hiệu cướp giật điện thoại",
+                        "event_type": "robbery_phone",
+                        "detected_label": "cell phone",
+                        "confidence": phone_threat.get("confidence"),
+                    }],
+                }
+
+            return {
+                "translated_query_en": f"Check phone robbery: {user_question}",
+                "question_type": QAQuestionType.THREAT,
+                "reasoning_en": "No phone robbery events detected in context.",
+                "response_vi": "Không phát hiện hành vi cướp giật điện thoại nào trong video.",
+                "evidences": [],
+            }
+
+        # --- D. TRƯỜNG HỢP: HỎI VỀ CƯỚP BALO / TÚI XÁCH ---
+        if is_asking_bag and is_asking_theft:
+            bag_event = next(
+                (e for e in security_events if e.get("event_type") == "robbery_backpack"),
+                None,
+            )
+            if bag_event:
+                start_ts = float(bag_event.get("start_timestamp", 0.0))
+                end_ts = float(bag_event.get("end_timestamp", start_ts))
+                return {
+                    "translated_query_en": f"Is there backpack robbery: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found backpack robbery event from {start_ts:.2f}s to {end_ts:.2f}s.",
+                    "response_vi": f"Phát hiện hành vi cướp giật balo/túi xách từ {start_ts:.2f}s đến {end_ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": bag_event.get("primary_frame_id"),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "snapshot_path": bag_event.get("snapshot_path", ""),
+                        "highlight_bbox": parse_bbox(bag_event),
+                        "explanation_vi": "Hành vi cướp giật balo (robbery_backpack)",
+                        "event_type": "robbery_backpack",
+                        "detected_label": "backpack",
+                        "confidence": bag_event.get("confidence"),
+                    }],
+                }
+
+            bag_threat = next(
+                (t for t in threats if t.get("threat_type") in ["robbery_backpack", "theft"] and any(b in str(t.get("description_en", "")).lower() for b in ["backpack", "bag", "handbag", "suitcase"])),
+                None,
+            )
+            if bag_threat:
+                ts = float(bag_threat.get("timestamp_seconds", 0.0))
+                return {
+                    "translated_query_en": f"Check backpack robbery threat: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found backpack robbery threat at {ts:.2f}s.",
+                    "response_vi": f"Phát hiện dấu hiệu cướp giật balo/túi xách tại mốc {ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": bag_threat.get("frame_id"),
+                        "start_timestamp": ts,
+                        "end_timestamp": ts + 3.0,
+                        "snapshot_path": bag_threat.get("snapshot_path", ""),
+                        "highlight_bbox": json.loads(bag_threat["bbox_json"]) if bag_threat.get("bbox_json") else None,
+                        "explanation_vi": "Dấu hiệu cướp giật balo/túi xách",
+                        "event_type": "robbery_backpack",
+                        "detected_label": "backpack",
+                        "confidence": bag_threat.get("confidence"),
+                    }],
+                }
+
+            return {
+                "translated_query_en": f"Check backpack robbery: {user_question}",
+                "question_type": QAQuestionType.THREAT,
+                "reasoning_en": "No backpack robbery events detected in context.",
+                "response_vi": "Không phát hiện hành vi cướp giật balo hoặc túi xách nào trong video.",
+                "evidences": [],
+            }
+
+        # --- E. TRƯỜNG HỢP: HỎI VỀ CHÁY NỔ / KHÓI LỬA ---
+        if is_asking_fire:
+            fire_event = next(
+                (e for e in security_events if e.get("event_type") == "fire_smoke"),
+                None,
+            )
+            if fire_event:
+                start_ts = float(fire_event.get("start_timestamp", 0.0))
+                end_ts = float(fire_event.get("end_timestamp", start_ts))
+                return {
+                    "translated_query_en": f"Is there fire or smoke: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found fire hazard event from {start_ts:.2f}s to {end_ts:.2f}s.",
+                    "response_vi": f"Phát hiện sự kiện cháy nổ / khói lửa (fire_smoke) từ {start_ts:.2f}s đến {end_ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": fire_event.get("primary_frame_id"),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "snapshot_path": fire_event.get("snapshot_path", ""),
+                        "highlight_bbox": parse_bbox(fire_event),
+                        "explanation_vi": "Hiện tượng cháy nổ / khói lửa được ghi nhận trong video",
+                        "event_type": "fire_smoke",
+                        "detected_label": "fire",
+                        "confidence": fire_event.get("confidence"),
+                    }],
+                }
+
+            fire_threat = next(
+                (t for t in threats if t.get("threat_type") == "fire_smoke"),
+                None,
+            )
+            if fire_threat:
+                ts = float(fire_threat.get("timestamp_seconds", 0.0))
+                return {
+                    "translated_query_en": f"Check fire threat: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found fire hazard threat at {ts:.2f}s.",
+                    "response_vi": f"Phát hiện cảnh báo khói lửa / cháy tại mốc thời gian {ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": fire_threat.get("frame_id"),
+                        "start_timestamp": ts,
+                        "end_timestamp": ts + 3.0,
+                        "snapshot_path": fire_threat.get("snapshot_path", ""),
+                        "highlight_bbox": json.loads(fire_threat["bbox_json"]) if fire_threat.get("bbox_json") else None,
+                        "explanation_vi": "Dấu hiệu lửa/cháy được ghi nhận qua thị giác máy tính",
+                        "event_type": "fire_smoke",
+                        "detected_label": "fire",
+                        "confidence": fire_threat.get("confidence"),
+                    }],
+                }
+
+            return {
+                "translated_query_en": f"Check for fire/smoke: {user_question}",
+                "question_type": QAQuestionType.THREAT,
+                "reasoning_en": "No fire or smoke hazards detected in context.",
+                "response_vi": "Không phát hiện hiện tượng cháy nổ hoặc khói lửa trong dữ liệu giám sát.",
+                "evidences": [],
+            }
+
+        # --- F. TRƯỜNG HỢP: HỎI VỀ SÚNG / DAO / VŨ KHÍ ---
+        if is_asking_weapon:
+            weapon_event = next(
+                (e for e in security_events if e.get("event_type") in ["knife_present", "knife_threat", "weapon_present", "weapon_drawn", "shooting"]),
+                None,
+            )
+            if weapon_event:
+                start_ts = float(weapon_event.get("start_timestamp", 0.0))
+                end_ts = float(weapon_event.get("end_timestamp", start_ts))
+                ev_type = weapon_event.get("event_type")
+                return {
+                    "translated_query_en": f"Is there any weapon or shooting: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found weapon/shooting event ({ev_type}) from {start_ts:.2f}s to {end_ts:.2f}s.",
+                    "response_vi": f"Phát hiện vũ khí ({evt_vn_map.get(ev_type, ev_type)}) từ {start_ts:.2f}s đến {end_ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": weapon_event.get("primary_frame_id"),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "snapshot_path": weapon_event.get("snapshot_path", ""),
+                        "highlight_bbox": parse_bbox(weapon_event),
+                        "explanation_vi": f"Đối tượng cầm hoặc sử dụng vũ khí ({ev_type})",
+                        "event_type": ev_type,
+                        "detected_label": "knife" if "knife" in str(ev_type) or "dao" in q_lower else "weapon",
+                        "confidence": weapon_event.get("confidence"),
+                    }],
+                }
+
+            weapon_threat = next(
+                (t for t in threats if t.get("threat_type") in ["knife_threat", "weapon_drawn", "shooting"]),
+                None,
+            )
+            if weapon_threat:
+                ts = float(weapon_threat.get("timestamp_seconds", 0.0))
+                threat_type = weapon_threat.get("threat_type")
+                return {
+                    "translated_query_en": f"Check weapon threat: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found weapon threat ({threat_type}) at {ts:.2f}s.",
+                    "response_vi": f"Phát hiện cảnh báo vũ khí nguy hiểm ({threat_type}) tại mốc {ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": weapon_threat.get("frame_id"),
+                        "start_timestamp": ts,
+                        "end_timestamp": ts + 3.0,
+                        "snapshot_path": weapon_threat.get("snapshot_path", ""),
+                        "highlight_bbox": json.loads(weapon_threat["bbox_json"]) if weapon_threat.get("bbox_json") else None,
+                        "explanation_vi": f"Cảnh báo vũ khí nguy hiểm ({threat_type})",
+                        "event_type": threat_type,
+                        "detected_label": "knife" if "knife" in str(threat_type) or "dao" in q_lower else "weapon",
+                        "confidence": weapon_threat.get("confidence"),
+                    }],
+                }
+
+            return {
+                "translated_query_en": f"Check for weapons: {user_question}",
+                "question_type": QAQuestionType.THREAT,
+                "reasoning_en": "No weapons or armed threats detected in context.",
+                "response_vi": "Không phát hiện súng, dao hoặc vũ khí nguy hiểm nào trong dữ liệu giám sát.",
+                "evidences": [],
+            }
+
+        # --- G. TRƯỜNG HỢP: HỎI CHUNG VỀ SỰ KIỆN NGUY HIỂM / BẤT THƯỜNG / AN NINH ---
+        if is_asking_general_threat or is_asking_theft:
+            all_security_events = list(security_events)
+            if all_security_events:
+                evidences_list = []
+                event_descs = []
+                for ev in all_security_events[:3]:  # Top 3 sự kiện tiêu biểu
+                    start_ts = float(ev.get("start_timestamp", 0.0))
+                    end_ts = float(ev.get("end_timestamp", start_ts))
+                    ev_type = ev.get("event_type", "security_event")
+                    vn_name = evt_vn_map.get(ev_type, ev_type)
+                    event_descs.append(f"{vn_name} ({start_ts:.1f}s - {end_ts:.1f}s)")
+                    evidences_list.append({
+                        "frame_id": ev.get("primary_frame_id"),
+                        "start_timestamp": start_ts,
+                        "end_timestamp": end_ts,
+                        "snapshot_path": ev.get("snapshot_path", ""),
+                        "highlight_bbox": parse_bbox(ev),
+                        "explanation_vi": f"Sự kiện an ninh: {vn_name}",
+                        "event_type": ev_type,
+                        "detected_label": ev_type,
+                        "confidence": ev.get("confidence"),
+                    })
+                return {
+                    "translated_query_en": f"Check all security threats: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found {len(all_security_events)} security event(s).",
+                    "response_vi": f"Phát hiện {len(all_security_events)} sự kiện an ninh trong video: {'; '.join(event_descs)}.",
+                    "evidences": evidences_list,
+                }
+
+            if threats:
+                top_threat = threats[0]
+                ts = float(top_threat.get("timestamp_seconds", 0.0))
+                th_type = top_threat.get("threat_type", "threat")
+                return {
+                    "translated_query_en": f"Check general threats: {user_question}",
+                    "question_type": QAQuestionType.THREAT,
+                    "reasoning_en": f"Found threat ({th_type}) at {ts:.2f}s.",
+                    "response_vi": f"Phát hiện cảnh báo nguy hiểm ({th_type}) tại mốc thời gian {ts:.2f}s.",
+                    "evidences": [{
+                        "frame_id": top_threat.get("frame_id"),
+                        "start_timestamp": ts,
+                        "end_timestamp": ts + 3.0,
+                        "snapshot_path": top_threat.get("snapshot_path", ""),
+                        "highlight_bbox": json.loads(top_threat["bbox_json"]) if top_threat.get("bbox_json") else None,
+                        "explanation_vi": f"Cảnh báo nguy hiểm ({th_type})",
+                        "event_type": th_type,
+                        "detected_label": th_type,
+                        "confidence": top_threat.get("confidence"),
+                    }],
+                }
+
+            return {
+                "translated_query_en": f"Check for any danger threats: {user_question}",
+                "question_type": QAQuestionType.THREAT,
+                "reasoning_en": "No danger threats or abnormal security events recorded in context.",
+                "response_vi": "Không phát hiện sự kiện nguy hiểm hoặc hành vi bất thường nào trong dữ liệu giám sát.",
                 "evidences": [],
             }
 

@@ -1040,74 +1040,95 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
           ),
           const SizedBox(height: 6),
 
-          // Snapshot Image Thumbnail
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadii.sm),
-            child: hasImage
-                ? Image.network(
-                    imageUrl,
-                    height: 110,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      height: 110,
-                      color: Colors.grey.shade300,
-                      child: Center(
-                        child: Icon(Icons.broken_image, color: Colors.grey),
+              // Snapshot Image Thumbnail
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+                child: hasImage
+                    ? Image.network(
+                        imageUrl,
+                        height: 110,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          height: 110,
+                          color: Colors.grey.shade300,
+                          child: Center(
+                            child: Icon(Icons.broken_image, color: Colors.grey),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        height: 110,
+                        color: Colors.grey.shade200,
+                        child: Center(
+                          child: Icon(Icons.videocam, color: Colors.grey),
+                        ),
                       ),
-                    ),
-                  )
-                : Container(
-                    height: 110,
-                    color: Colors.grey.shade200,
-                    child: Center(
-                      child: Icon(Icons.videocam, color: Colors.grey),
-                    ),
-                  ),
-          ),
-          if (ev.explanation != null && ev.explanation!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              ev.explanation!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
-            ),
-          ],
-          if (ev.eventType != null || ev.confidence != null) ...[
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                if (ev.eventType != null)
-                  Chip(
-                    visualDensity: VisualDensity.compact,
-                    label: Text(
-                      ev.eventType!.replaceAll('_', ' '),
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
-                if (ev.detectedLabel != null)
-                  Chip(
-                    visualDensity: VisualDensity.compact,
-                    label: Text(
-                      ev.detectedLabel!.replaceAll('_', ' '),
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
-                if (ev.confidence != null)
-                  Chip(
-                    visualDensity: VisualDensity.compact,
-                    label: Text(
-                      'Confidence ${(ev.confidence! * 100).toStringAsFixed(1)}%',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
+              ),
+              if (ev.explanation != null && ev.explanation!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  ev.explanation!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                ),
               ],
-            ),
-          ],
-        ],
+              if (ev.eventType != null || ev.confidence != null) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    if (ev.eventType != null)
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(
+                          ev.eventType!.replaceAll('_', ' '),
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    if (ev.detectedLabel != null)
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(
+                          ev.detectedLabel!.replaceAll('_', ' '),
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    if (ev.confidence != null)
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(
+                          'Confidence ${(ev.confidence! * 100).toStringAsFixed(1)}%',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                    Icons.play_circle_outline,
+                    size: 14,
+                    color: AppColors.teal,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Mở video tại ${ev.formattedTimeRange}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.teal,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1215,4 +1236,36 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         return 'HỎI ĐÁP AN NINH';
     }
   }
+  Color _confidenceColor(double confidence) {
+    if (confidence >= 0.80) {
+      return AppColors.success;
+    } else if (confidence >= 0.50) {
+      return AppColors.warning;
+    } else {
+      return AppColors.danger;
+    }
+  }
+
+  Color _eventSeverityColor(String? eventType) {
+    if (eventType == null) return AppColors.teal;
+    final lower = eventType.toLowerCase();
+    if (lower.contains('threat') ||
+        lower.contains('knife') ||
+        lower.contains('weapon') ||
+        lower.contains('gun') ||
+        lower.contains('pistol') ||
+        lower.contains('shooting') ||
+        lower.contains('fighting') ||
+        lower.contains('violence') ||
+        lower.contains('fire')) {
+      return AppColors.danger;
+    }
+    if (lower.contains('theft') ||
+        lower.contains('robbery') ||
+        lower.contains('snatch')) {
+      return AppColors.warning;
+    }
+    return AppColors.teal;
+  }
+
 }

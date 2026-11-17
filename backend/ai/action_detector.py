@@ -40,7 +40,7 @@ class ActionVerifier:
         self,
         model_name: str = DEFAULT_MODEL_NAME,
         device: str | None = None,
-        confidence_threshold: float = 0.60,
+        confidence_threshold: float = 0.45,
     ) -> None:
         self.model_name = model_name
         self.confidence_threshold = confidence_threshold
@@ -243,10 +243,10 @@ class ActionVerifier:
         motion_score = float(np.mean(diff))
 
         # Dynamic confidence based on movement intensity
-        normalized_conf = min(0.98, max(0.65, 0.60 + (motion_score / 100.0) * 0.35))
+        normalized_conf = min(0.98, max(0.70, 0.65 + (motion_score / 100.0) * 0.35))
 
         if suspected_action in [ThreatType.SHOOTING, "shooting"]:
-            is_suspicious = motion_score > 4.0
+            is_suspicious = motion_score > 2.5
             return ActionResult(
                 action_type=SecurityEventType.SHOOTING,
                 confidence=round(normalized_conf, 2),
@@ -256,7 +256,7 @@ class ActionVerifier:
             )
 
         if suspected_action in [ThreatType.FIGHTING, ThreatType.VIOLENCE, "fighting"]:
-            is_suspicious = motion_score > 8.0
+            is_suspicious = motion_score > 4.5
             return ActionResult(
                 action_type=SecurityEventType.FIGHTING,
                 confidence=round(normalized_conf, 2),
@@ -272,7 +272,7 @@ class ActionVerifier:
             ThreatType.THEFT,
             "theft",
         ]:
-            is_suspicious = motion_score > 6.0
+            is_suspicious = motion_score > 3.0
             return ActionResult(
                 action_type=suspected_action,
                 confidence=round(normalized_conf, 2),

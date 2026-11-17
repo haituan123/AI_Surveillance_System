@@ -81,7 +81,7 @@ class FrameIndexerService:
                 for j in range(i + 1, len(analysis.tracks)):
                     b1 = analysis.tracks[i].bounding_box
                     b2 = analysis.tracks[j].bounding_box
-                    if (max(b1.x1, b2.x1) < min(b1.x2, b2.x2) + 60) and (max(b1.y1, b2.y1) < min(b1.y2, b2.y2) + 60):
+                    if (max(b1.x1, b2.x1) < min(b1.x2, b2.x2) + 120) and (max(b1.y1, b2.y1) < min(b1.y2, b2.y2) + 120):
                         u_box = BoundingBox(
                             min(b1.x1, b2.x1),
                             min(b1.y1, b2.y1),

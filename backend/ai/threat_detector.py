@@ -91,7 +91,7 @@ SURVEILLANCE_OBJECT_CLASSES = {
 class ThreatAndObjectDetector:
     """Detects security threats (weapons, fire) and tracked surveillance objects (backpacks, phones)."""
 
-    def __init__(self, confidence_threshold: float = 0.35) -> None:
+    def __init__(self, confidence_threshold: float = 0.25) -> None:
         self.confidence_threshold = confidence_threshold
 
     @staticmethod
@@ -103,14 +103,14 @@ class ThreatAndObjectDetector:
         if frame_bgr is None or frame_bgr.size == 0:
             return []
 
-        # 1. RGB condition: Intense red component (R > G > B and R > 185)
+        # 1. RGB condition: Intense red component (R > G > B and R > 165)
         b, g, r = cv2.split(frame_bgr)
-        rgb_mask = (r > 185) & (r > g) & (g > b)
+        rgb_mask = (r > 165) & (r > g) & (g > b)
 
         # 2. HSV condition: Hue in red-to-yellow range, strong saturation & high luminance
         hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
         h, s, v = cv2.split(hsv)
-        hsv_mask = ((h <= 25) | (h >= 168)) & (s >= 50) & (v >= 180)
+        hsv_mask = ((h <= 28) | (h >= 165)) & (s >= 40) & (v >= 150)
 
         combined = (rgb_mask & hsv_mask).astype(np.uint8) * 255
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
@@ -207,8 +207,10 @@ class ThreatAndObjectDetector:
                     "cell phone", "phone", "laptop",
                     "motorcycle", "motorbike", "bicycle", "bike", "scooter"
                 ]:
+
+
                     for pbox in person_boxes:
-                        if self._is_interacting(pbox, obj.bounding_box):
+                        if self._is_interacting(pbox, obj.bounding_box, label=obj.label):
                             if obj.label in ["backpack", "handbag", "bag", "suitcase"]:
                                 specific_threat = ThreatType.ROBBERY_BACKPACK
                             elif obj.label in ["cell phone", "phone", "laptop"]:
@@ -241,23 +243,35 @@ class ThreatAndObjectDetector:
         return detected_objects, threat_events
 
     @staticmethod
-    def _is_interacting(person_box: BoundingBox, object_box: BoundingBox) -> bool:
-        """Determines if a person bounding box overlaps significantly with an object."""
+    def _is_interacting(person_box: BoundingBox, object_box: BoundingBox, label: str = "") -> bool:
+        """Determines if a person bounding box overlaps or is in close interaction with an object."""
         ix1 = max(person_box.x1, object_box.x1)
         iy1 = max(person_box.y1, object_box.y1)
         ix2 = min(person_box.x2, object_box.x2)
         iy2 = min(person_box.y2, object_box.y2)
 
-        if ix2 <= ix1 or iy2 <= iy1:
-            return False
+        inter_area = 0
+        if ix2 > ix1 and iy2 > iy1:
+            inter_area = (ix2 - ix1) * (iy2 - iy1)
 
-        inter_area = (ix2 - ix1) * (iy2 - iy1)
-        obj_area = (object_box.x2 - object_box.x1) * (object_box.y2 - object_box.y1)
-        if obj_area <= 0:
-            return False
-
+        obj_area = max(1, (object_box.x2 - object_box.x1) * (object_box.y2 - object_box.y1))
         overlap_ratio = inter_area / float(obj_area)
-        return overlap_ratio > 0.40
+
+        # Vehicles: Large objects, person standing/sitting by bike has 15-20% overlap or close proximity
+        if any(v in label.lower() for v in ["motorcycle", "motorbike", "bicycle", "bike", "scooter"]):
+            if overlap_ratio >= 0.15:
+                return True
+            pcx = (person_box.x1 + person_box.x2) / 2.0
+            pcy = (person_box.y1 + person_box.y2) / 2.0
+            ocx = (object_box.x1 + object_box.x2) / 2.0
+            ocy = (object_box.y1 + object_box.y2) / 2.0
+            max_dist = max(object_box.x2 - object_box.x1, object_box.y2 - object_box.y1) * 0.8
+            if ((pcx - ocx)**2 + (pcy - ocy)**2)**0.5 <= max_dist:
+                return True
+            return False
+
+        # Accessories / Phones / Backpacks: Require significant overlap (>0.35)
+        return overlap_ratio > 0.35
 
 
 def annotate_threat_events(

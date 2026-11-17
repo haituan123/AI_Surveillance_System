@@ -179,10 +179,11 @@ class QAVideoIndexManager:
             if cancelled():
                 return
 
+            person_tracker = getattr(runtime.engine, "person_tracker", None)
             yolo_model = None
             try:
-                if hasattr(runtime.engine, "person_tracker") and hasattr(runtime.engine.person_tracker, "_get_model"):
-                    yolo_model = runtime.engine.person_tracker._get_model()
+                if person_tracker is not None and hasattr(person_tracker, "_get_model"):
+                    yolo_model = person_tracker._get_model()
             except Exception:
                 pass
 
@@ -205,9 +206,14 @@ class QAVideoIndexManager:
                     if cancelled():
                         return
                     raw_detections = []
-                    if yolo_model is not None:
+                    if person_tracker is not None and hasattr(person_tracker, "detect_objects"):
                         try:
-                            yolo_res = yolo_model(frame, conf=0.30, verbose=False)
+                            raw_detections = person_tracker.detect_objects(frame, confidence=0.25)
+                        except Exception:
+                            pass
+                    elif yolo_model is not None:
+                        try:
+                            yolo_res = yolo_model(frame, conf=0.25, verbose=False)
                             if yolo_res and len(yolo_res) > 0 and yolo_res[0].boxes is not None:
                                 for box in yolo_res[0].boxes:
                                     cls_id = int(box.cls.item())
