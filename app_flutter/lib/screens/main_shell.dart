@@ -22,55 +22,56 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
   int _membersRefreshToken = 0;
+  bool _sidebarExpanded = true;
 
   List<_NavPage> get _pages => [
-        _NavPage(
-          title: 'Dashboard',
-          icon: Icons.dashboard_outlined,
-          selectedIcon: Icons.dashboard,
-          child: DashboardScreen(
-            onStartSurveillance: () => _selectPage(3),
-            onRegisterPerson: () => _selectPage(2),
-            onViewLogs: () => _selectPage(5),
-          ),
-        ),
-        _NavPage(
-          title: 'Members',
-          icon: Icons.people_alt_outlined,
-          selectedIcon: Icons.people_alt,
-          child: MembersScreen(
-            refreshToken: _membersRefreshToken,
-            onMembersChanged: _notifyMembersChanged,
-          ),
-        ),
-        _NavPage(
-          title: 'Register',
-          icon: Icons.person_add_alt_1_outlined,
-          selectedIcon: Icons.person_add_alt_1,
-          child: RegisterScreen(
-            refreshToken: _membersRefreshToken,
-            onMembersChanged: _notifyMembersChanged,
-          ),
-        ),
-        const _NavPage(
-          title: 'Surveillance',
-          icon: Icons.videocam_outlined,
-          selectedIcon: Icons.videocam,
-          child: SurveillanceScreen(),
-        ),
-        const _NavPage(
-          title: 'Video QA',
-          icon: Icons.psychology_outlined,
-          selectedIcon: Icons.psychology,
-          child: VideoQAScreen(),
-        ),
-        const _NavPage(
-          title: 'Logs',
-          icon: Icons.receipt_long_outlined,
-          selectedIcon: Icons.receipt_long,
-          child: LogsScreen(),
-        ),
-      ];
+    _NavPage(
+      title: 'Dashboard',
+      icon: Icons.dashboard_outlined,
+      selectedIcon: Icons.dashboard,
+      child: DashboardScreen(
+        onStartSurveillance: () => _selectPage(3),
+        onRegisterPerson: () => _selectPage(2),
+        onViewLogs: () => _selectPage(5),
+      ),
+    ),
+    _NavPage(
+      title: 'Members',
+      icon: Icons.people_alt_outlined,
+      selectedIcon: Icons.people_alt,
+      child: MembersScreen(
+        refreshToken: _membersRefreshToken,
+        onMembersChanged: _notifyMembersChanged,
+      ),
+    ),
+    _NavPage(
+      title: 'Register',
+      icon: Icons.person_add_alt_1_outlined,
+      selectedIcon: Icons.person_add_alt_1,
+      child: RegisterScreen(
+        refreshToken: _membersRefreshToken,
+        onMembersChanged: _notifyMembersChanged,
+      ),
+    ),
+    const _NavPage(
+      title: 'Surveillance',
+      icon: Icons.videocam_outlined,
+      selectedIcon: Icons.videocam,
+      child: SurveillanceScreen(),
+    ),
+    const _NavPage(
+      title: 'Video QA',
+      icon: Icons.psychology_outlined,
+      selectedIcon: Icons.psychology,
+      child: VideoQAScreen(),
+    ),
+    const _NavPage(
+      title: 'Logs',
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long,
+      child: LogsScreen(),
+    ),
+  ];
 
   void _selectPage(int index) {
     setState(() {
@@ -118,6 +119,9 @@ class _MainShellState extends State<MainShell> {
                   pages: _pages,
                   selectedIndex: _selectedIndex,
                   onSelected: _selectPage,
+                  expanded: _sidebarExpanded,
+                  onToggle: () =>
+                      setState(() => _sidebarExpanded = !_sidebarExpanded),
                 ),
                 VerticalDivider(width: 1, color: AppColors.border),
                 Expanded(child: body),
@@ -148,67 +152,100 @@ class _DesktopSidebar extends StatelessWidget {
     required this.pages,
     required this.selectedIndex,
     required this.onSelected,
+    required this.expanded,
+    required this.onToggle,
   });
 
   final List<_NavPage> pages;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final bool expanded;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Container(
-        width: AppLayout.sidebarWidth,
-        color: AppColors.surface,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.xl,
-            AppSpacing.lg,
-            AppSpacing.lg,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.tealSoft,
-                      borderRadius: BorderRadius.circular(AppRadii.sm),
-                    ),
-                    child: Icon(Icons.security, color: AppColors.teal),
+    final width = expanded
+        ? AppLayout.sidebarWidth
+        : AppLayout.compactSidebarWidth;
+    final horizontalPadding = expanded ? AppSpacing.lg : AppSpacing.md;
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.centerLeft,
+      clipBehavior: Clip.hardEdge,
+      child: SafeArea(
+        child: Container(
+          key: const ValueKey('desktop-sidebar'),
+          width: width,
+          color: AppColors.surface,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              AppSpacing.xl,
+              horizontalPadding,
+              AppSpacing.lg,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (expanded)
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: AppColors.tealSoft,
+                          borderRadius: BorderRadius.circular(AppRadii.sm),
+                        ),
+                        child: Icon(Icons.security, color: AppColors.teal),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'AI Face Security',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.text,
+                              ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: onToggle,
+                        tooltip: context.tr('Collapse navigation'),
+                        icon: const Icon(Icons.keyboard_double_arrow_left),
+                      ),
+                    ],
+                  )
+                else
+                  IconButton(
+                    onPressed: onToggle,
+                    tooltip: context.tr('Expand navigation'),
+                    icon: const Icon(Icons.keyboard_double_arrow_right),
+                    color: AppColors.tealDark,
                   ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Text(
-                      'AI Face Security',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.text,
-                          ),
+                const SizedBox(height: AppSpacing.xl),
+                ...pages.indexed.map(
+                  (entry) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _SidebarDestination(
+                      page: entry.$2,
+                      selected: entry.$1 == selectedIndex,
+                      onTap: () => onSelected(entry.$1),
+                      expanded: expanded,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              ...pages.indexed.map(
-                (entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: _SidebarDestination(
-                    page: entry.$2,
-                    selected: entry.$1 == selectedIndex,
-                    onTap: () => onSelected(entry.$1),
                   ),
                 ),
-              ),
-              const Spacer(),
-              const ConnectionChip(),
-              const SizedBox(height: AppSpacing.sm),
-              const SettingsButton(expanded: true),
-            ],
+                const Spacer(),
+                Align(child: ConnectionChip(compact: !expanded)),
+                const SizedBox(height: AppSpacing.sm),
+                SettingsButton(expanded: expanded),
+              ],
+            ),
           ),
         ),
       ),
@@ -221,16 +258,18 @@ class _SidebarDestination extends StatelessWidget {
     required this.page,
     required this.selected,
     required this.onTap,
+    required this.expanded,
   });
 
   final _NavPage page;
   final bool selected;
   final VoidCallback onTap;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context) {
     final color = selected ? AppColors.tealDark : AppColors.textMuted;
-    return Material(
+    final destination = Material(
       color: selected ? AppColors.tealSoft : Colors.transparent,
       borderRadius: BorderRadius.circular(AppRadii.sm),
       child: InkWell(
@@ -242,24 +281,31 @@ class _SidebarDestination extends StatelessWidget {
             vertical: AppSpacing.md,
           ),
           child: Row(
+            mainAxisAlignment: expanded
+                ? MainAxisAlignment.start
+                : MainAxisAlignment.center,
             children: [
               Icon(selected ? page.selectedIcon : page.icon, color: color),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  page.title,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: color,
-                        fontWeight:
-                            selected ? FontWeight.w900 : FontWeight.w700,
-                      ),
+              if (expanded) ...[
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    page.title,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: color,
+                      fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
       ),
     );
+
+    if (expanded) return destination;
+    return Tooltip(message: context.tr(page.title), child: destination);
   }
 }
 

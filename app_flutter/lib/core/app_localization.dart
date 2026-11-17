@@ -7,6 +7,10 @@ class AppTranslator {
 
   static const Map<String, String> _englishToVietnamese = {
     'Settings': 'Cài đặt',
+    'Collapse navigation': 'Thu gọn thanh điều hướng',
+    'Expand navigation': 'Mở rộng thanh điều hướng',
+    'Collapse video panel': 'Thu gọn khu vực video',
+    'Expand video panel': 'Mở khu vực video',
     'Language': 'Ngôn ngữ',
     'English': 'Tiếng Anh',
     'Vietnamese': 'Tiếng Việt',

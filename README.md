@@ -37,7 +37,14 @@ before starting Docker:
 
 ```dotenv
 GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-3.6-flash
+GEMINI_FALLBACK_MODEL=gemini-3.1-flash-lite
+GEMINI_TIMEOUT_SECONDS=60
 ```
+
+Video Q&A tries the primary model first, then the fallback model when the
+primary model is temporarily unavailable. The longer timeout prevents normal
+Gemini responses from being abandoned prematurely.
 
 Face recognition and video analysis work without that key. The first AI request
 may be slow while the YOLO and InsightFace assets are downloaded into the

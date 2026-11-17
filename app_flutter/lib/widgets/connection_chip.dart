@@ -4,11 +4,14 @@ import 'package:flutter/material.dart' hide Text;
 import 'package:http/http.dart' as http;
 
 import '../core/api_config.dart';
+import '../core/app_localization.dart';
 import '../theme/app_tokens.dart';
 import 'localized_text.dart';
 
 class ConnectionChip extends StatefulWidget {
-  const ConnectionChip({super.key});
+  const ConnectionChip({super.key, this.compact = false});
+
+  final bool compact;
 
   @override
   State<ConnectionChip> createState() => _ConnectionChipState();
@@ -57,6 +60,23 @@ class _ConnectionChipState extends State<ConnectionChip> {
     final color = isChecking
         ? AppColors.textSubtle
         : (isOnline ? AppColors.teal : AppColors.danger);
+
+    if (widget.compact) {
+      return Tooltip(
+        message: context.tr(label),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Icon(Icons.circle, size: 12, color: color),
+        ),
+      );
+    }
 
     return Chip(
       avatar: Icon(Icons.circle, size: 12, color: color),

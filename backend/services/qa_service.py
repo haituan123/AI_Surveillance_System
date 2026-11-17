@@ -11,7 +11,9 @@ from uuid import uuid4
 
 from backend.app.config import (
     GEMINI_API_KEY,
+    GEMINI_FALLBACK_MODEL,
     GEMINI_MODEL,
+    GEMINI_TIMEOUT_SECONDS,
     SNAPSHOTS_DIR,
     TEMP_UPLOADS_DIR,
     VIDEO_QA_ANALYSIS_FPS,
@@ -71,6 +73,8 @@ class QAService:
         *,
         api_key: str = GEMINI_API_KEY,
         model_name: str = GEMINI_MODEL,
+        fallback_model_name: str = GEMINI_FALLBACK_MODEL,
+        request_timeout_seconds: float = GEMINI_TIMEOUT_SECONDS,
         index_manager: QAVideoIndexManager = qa_video_index_manager,
         snapshots_dir: Path = SNAPSHOTS_DIR,
         uploads_dir: Path = TEMP_UPLOADS_DIR,
@@ -78,6 +82,13 @@ class QAService:
         self.connection = connection
         self.api_key = api_key
         self.model_name = model_name
+        self.fallback_model_name = fallback_model_name.strip()
+        self.request_timeout_seconds = float(request_timeout_seconds)
+        if (
+            not math.isfinite(self.request_timeout_seconds)
+            or self.request_timeout_seconds <= 0
+        ):
+            raise ValueError("Gemini request timeout must be a positive number")
         self.index_manager = index_manager
         try:
             self.snapshots_dir = Path(snapshots_dir).resolve()
@@ -631,7 +642,6 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
   ]
 }}
 """
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
@@ -640,20 +650,51 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
             },
         }
 
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
+        model_names = [self.model_name]
+        if (
+            self.fallback_model_name
+            and self.fallback_model_name != self.model_name
+        ):
+            model_names.append(self.fallback_model_name)
+
+        for model_name in model_names:
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model_name}:generateContent"
             )
-            with urllib.request.urlopen(req, timeout=15) as response:
-                res_body = json.loads(response.read().decode("utf-8"))
-                text_content = res_body["candidates"][0]["content"]["parts"][0]["text"]
-                return json.loads(text_content)
-        except Exception as exc:
-            logger.warning("Gemini API call failed (%s). Falling back to heuristic reasoning.", exc)
-            return self._fallback_heuristic_qa(user_question, context_data)
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": self.api_key,
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(
+                    req,
+                    timeout=self.request_timeout_seconds,
+                ) as response:
+                    res_body = json.loads(response.read().decode("utf-8"))
+                    text_content = res_body["candidates"][0]["content"]["parts"][0]["text"]
+                    result = json.loads(text_content)
+                    logger.info(
+                        "Gemini response received using model %s",
+                        model_name,
+                    )
+                    return result
+            except Exception as exc:
+                logger.warning(
+                    "Gemini API call failed for model %s (%s).",
+                    model_name,
+                    exc,
+                )
+
+        logger.warning(
+            "All configured Gemini models failed. Falling back to heuristic reasoning."
+        )
+        return self._fallback_heuristic_qa(user_question, context_data)
 
     def _fallback_heuristic_qa(self, user_question: str, context_data: dict[str, Any]) -> dict[str, Any]:
         """Local rule-based fallback when Gemini API is offline or not configured."""

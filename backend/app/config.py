@@ -55,6 +55,11 @@ CORS_ORIGINS = [
 # Google Gemini API Settings for Video QA
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_FALLBACK_MODEL = os.getenv(
+    "GEMINI_FALLBACK_MODEL",
+    "gemini-3.1-flash-lite",
+)
+GEMINI_TIMEOUT_SECONDS = _float_setting("GEMINI_TIMEOUT_SECONDS", 60.0)
 
 DATA_DIR = _path_setting("DATA_DIR", BASE_DIR / "data")
 DATABASE_PATH = _path_setting("DATABASE_PATH", BASE_DIR / "database" / "app.db")

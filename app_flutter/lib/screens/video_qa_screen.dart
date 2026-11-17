@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide Text;
@@ -34,6 +34,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
   bool _sending = false;
   bool _uploadingVideo = false;
   bool _showHistory = false;
+  bool _showVideoRail = true;
   String? _errorMessage;
   int _videoPage = 0;
   Timer? _pollTimer;
@@ -250,6 +251,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         _uploadedVideos.insert(0, uploaded);
         _selectedScope = uploaded.videoId;
         _videoPage = 0;
+        _showVideoRail = true;
         _uploadingVideo = false;
       });
 
@@ -412,10 +414,19 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                 _buildHeader(isDesktop),
                 _buildScopeAndPromptsBar(),
                 Divider(height: 1, color: AppColors.border),
-                _buildVideoWorkspace(),
-                Divider(height: 1, color: AppColors.border),
-                Expanded(child: _buildChatBody()),
-                _buildInputBar(),
+                Expanded(
+                  child:
+                      MediaQuery.sizeOf(context).width >= AppBreakpoints.desktop
+                      ? _buildWideChatWorkspace()
+                      : Column(
+                          children: [
+                            _buildVideoWorkspace(),
+                            Divider(height: 1, color: AppColors.border),
+                            Expanded(child: _buildChatBody()),
+                            _buildInputBar(),
+                          ],
+                        ),
+                ),
               ],
             ),
           ),
@@ -555,6 +566,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   onSelected: (value) => setState(() {
                     _selectedScope = value;
                     if (value == 'all') _videoPage = 0;
+                    if (value != 'all') _showVideoRail = true;
                   }),
                   itemBuilder: (context) => [
                     PopupMenuItem(
@@ -813,7 +825,10 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       _showSnackBar('Không xác định được video nguồn của bằng chứng này.');
       return;
     }
-    setState(() => _selectedScope = source.videoId);
+    setState(() {
+      _selectedScope = source.videoId;
+      _showVideoRail = true;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _videoKey(source.videoId).currentState?.seekTo(
         Duration(milliseconds: (evidence.startTimestamp * 1000).round()),
@@ -979,6 +994,173 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildWideChatWorkspace() {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            children: [
+              Expanded(child: _buildChatBody()),
+              _buildInputBar(),
+            ],
+          ),
+        ),
+        _buildVideoRail(),
+      ],
+    );
+  }
+
+  Widget _buildVideoRail() {
+    const expandedWidth = 360.0;
+    const collapsedWidth = 52.0;
+    final selectedVideo = _videoForId(_selectedScope);
+    final videos = <QAUploadedVideoModel>[
+      ?selectedVideo,
+      ..._uploadedVideos.where(
+        (video) => video.videoId != selectedVideo?.videoId,
+      ),
+    ];
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.centerRight,
+      clipBehavior: Clip.hardEdge,
+      child: SizedBox(
+        key: const ValueKey('video-rail'),
+        width: _showVideoRail ? expandedWidth : collapsedWidth,
+        child: _showVideoRail
+            ? DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSubtle,
+                  border: Border(left: BorderSide(color: AppColors.border)),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      height: 52,
+                      padding: const EdgeInsets.only(left: 14, right: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        border: Border(
+                          bottom: BorderSide(color: AppColors.border),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.video_library_outlined,
+                            color: AppColors.teal,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Video (${_uploadedVideos.length})',
+                              style: TextStyle(
+                                color: AppColors.text,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            key: const ValueKey('collapse-video-rail'),
+                            onPressed: () =>
+                                setState(() => _showVideoRail = false),
+                            tooltip: context.tr('Collapse video panel'),
+                            icon: const Icon(Icons.keyboard_double_arrow_right),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: videos.isEmpty
+                          ? _buildEmptyVideoRail()
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(10),
+                              itemCount: videos.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final video = videos[index];
+                                return SizedBox(
+                                  height: 200,
+                                  child: _QAVideoPlayerCard(
+                                    key: _videoKey(video.videoId),
+                                    video: video,
+                                    displayName: _videoDisplayName(video),
+                                    contentUrl: _qaService.videoContentUrl(
+                                      video.videoId,
+                                    ),
+                                    isQueryTarget:
+                                        _selectedScope == video.videoId,
+                                    onSelectForQuery: () => setState(
+                                      () => _selectedScope = video.videoId,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              )
+            : DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border(left: BorderSide(color: AppColors.border)),
+                ),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: IconButton(
+                      key: const ValueKey('expand-video-rail'),
+                      onPressed: () => setState(() => _showVideoRail = true),
+                      tooltip: context.tr('Expand video panel'),
+                      color: AppColors.tealDark,
+                      icon: const Icon(Icons.keyboard_double_arrow_left),
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyVideoRail() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.video_library_outlined,
+              color: AppColors.textSubtle,
+              size: 34,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Chưa có video',
+              style: TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _uploadingVideo ? null : _pickAndUploadVideo,
+              icon: const Icon(Icons.add_rounded, size: 17),
+              label: Text(_uploadingVideo ? 'Đang tải...' : 'Thêm video'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

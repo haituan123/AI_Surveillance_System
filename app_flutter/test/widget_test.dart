@@ -61,6 +61,56 @@ void main() {
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.dark);
   });
+
+  testWidgets('desktop sidebar collapses to compact navigation', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await _setViewport(tester, const Size(1440, 900));
+    await tester.pumpWidget(const FaceSecurityApp());
+    await tester.pumpAndSettle();
+
+    final sidebar = find.byKey(const ValueKey('desktop-sidebar'));
+    expect(tester.getSize(sidebar).width, 260);
+
+    await tester.tap(find.byIcon(Icons.keyboard_double_arrow_left));
+    await tester.pumpAndSettle();
+
+    expect(tester.getSize(sidebar).width, 80);
+    expect(find.byIcon(Icons.keyboard_double_arrow_right), findsOneWidget);
+
+    await _tapDestination(tester, Icons.people_alt_outlined);
+    expect(find.byIcon(Icons.people_alt_outlined), findsNothing);
+    expect(find.byIcon(Icons.people_alt), findsWidgets);
+
+    await tester.tap(find.byIcon(Icons.keyboard_double_arrow_right));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(sidebar).width, 260);
+  });
+
+  testWidgets('video panel slides closed to give chat more space', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await _setViewport(tester, const Size(1440, 900));
+    await tester.pumpWidget(const FaceSecurityApp());
+    await tester.pump();
+
+    await _tapDestination(tester, Icons.psychology_outlined);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final videoRail = find.byKey(const ValueKey('video-rail'));
+    expect(tester.getSize(videoRail).width, 360);
+
+    await tester.tap(find.byKey(const ValueKey('collapse-video-rail')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getSize(videoRail).width, 52);
+    expect(find.byKey(const ValueKey('expand-video-rail')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('expand-video-rail')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getSize(videoRail).width, 360);
+  });
 }
 
 Future<void> _setViewport(WidgetTester tester, Size size) async {

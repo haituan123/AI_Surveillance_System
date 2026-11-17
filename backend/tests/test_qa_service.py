@@ -3,7 +3,7 @@ import sqlite3
 import unittest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -69,6 +69,133 @@ class VideoQASamplingTestCase(unittest.TestCase):
         self.assertEqual(source_fps, 25.0)
         self.assertEqual(interval, 3)
         self.assertAlmostEqual(effective_fps, 25.0 / 3.0)
+
+
+class GeminiReasoningTestCase(unittest.TestCase):
+    def setUp(self):
+        self.connection = make_test_connection()
+        self.addCleanup(self.connection.close)
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        root = Path(self.temp.name).resolve()
+        self.snapshots = root / "snapshots"
+        self.uploads = root / "uploads"
+        self.snapshots.mkdir()
+        self.uploads.mkdir()
+        self.manager = QAVideoIndexManager(
+            qa_snapshots_dir=self.snapshots / "qa"
+        )
+        self.service = QAService(
+            self.connection,
+            api_key="test-key",
+            model_name="test-model",
+            fallback_model_name="fallback-model",
+            request_timeout_seconds=47,
+            index_manager=self.manager,
+            snapshots_dir=self.snapshots,
+            uploads_dir=self.uploads,
+        )
+
+    def test_gemini_request_uses_header_and_configured_timeout(self):
+        gemini_result = {
+            "translated_query_en": "Is anyone present?",
+            "question_type": "general",
+            "reasoning_en": "No evidence was supplied.",
+            "response_vi": "Không có dữ liệu.",
+            "evidences": [],
+        }
+        response_body = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [{"text": json.dumps(gemini_result)}]
+                    }
+                }
+            ]
+        }
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            response_body
+        ).encode("utf-8")
+
+        with patch(
+            "backend.services.qa_service.urllib.request.urlopen",
+            return_value=response,
+        ) as urlopen:
+            result = self.service._reason_with_gemini("Có ai không?", {})
+
+        self.assertEqual(result, gemini_result)
+        request = urlopen.call_args.args[0]
+        headers = {name.lower(): value for name, value in request.header_items()}
+        self.assertEqual(headers["x-goog-api-key"], "test-key")
+        self.assertNotIn("test-key", request.full_url)
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], 47)
+
+    def test_gemini_timeout_uses_local_fallback(self):
+        fallback = {"response_vi": "fallback", "evidences": []}
+        with (
+            patch(
+                "backend.services.qa_service.urllib.request.urlopen",
+                side_effect=TimeoutError,
+            ) as urlopen,
+            patch.object(
+                self.service,
+                "_fallback_heuristic_qa",
+                return_value=fallback,
+            ) as fallback_reasoner,
+        ):
+            result = self.service._reason_with_gemini("Có ai không?", {})
+
+        self.assertEqual(result, fallback)
+        self.assertEqual(urlopen.call_count, 2)
+        fallback_reasoner.assert_called_once_with("Có ai không?", {})
+
+    def test_failed_primary_model_uses_gemini_model_fallback(self):
+        gemini_result = {
+            "translated_query_en": "Is anyone present?",
+            "question_type": "general",
+            "reasoning_en": "No evidence was supplied.",
+            "response_vi": "Không có dữ liệu.",
+            "evidences": [],
+        }
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": json.dumps(gemini_result)}]
+                        }
+                    }
+                ]
+            }
+        ).encode("utf-8")
+
+        with patch(
+            "backend.services.qa_service.urllib.request.urlopen",
+            side_effect=[TimeoutError, response],
+        ) as urlopen:
+            result = self.service._reason_with_gemini("Có ai không?", {})
+
+        self.assertEqual(result, gemini_result)
+        self.assertEqual(urlopen.call_count, 2)
+        fallback_request = urlopen.call_args_list[1].args[0]
+        self.assertTrue(
+            fallback_request.full_url.endswith(
+                "/fallback-model:generateContent"
+            )
+        )
+
+    def test_non_positive_gemini_timeout_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "timeout"):
+            QAService(
+                self.connection,
+                api_key="test-key",
+                request_timeout_seconds=0,
+                index_manager=self.manager,
+                snapshots_dir=self.snapshots,
+                uploads_dir=self.uploads,
+            )
 
 
 class QAServiceTestCase(unittest.TestCase):

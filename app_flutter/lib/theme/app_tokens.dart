@@ -70,4 +70,5 @@ class AppLayout {
   static const formMaxWidth = 1040.0;
   static const dataMaxWidth = 1440.0;
   static const sidebarWidth = 260.0;
+  static const compactSidebarWidth = 80.0;
 }

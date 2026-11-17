@@ -14,6 +14,8 @@ services:
       # Set this in the root .env file only when Video Q&A is required.
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.6-flash}"
+      GEMINI_FALLBACK_MODEL: "${GEMINI_FALLBACK_MODEL:-gemini-3.1-flash-lite}"
+      GEMINI_TIMEOUT_SECONDS: "${GEMINI_TIMEOUT_SECONDS:-60}"
       VIDEO_QA_ANALYSIS_FPS: "${VIDEO_QA_ANALYSIS_FPS:-8}"
     volumes:
       - backend_database:/app/backend/database
