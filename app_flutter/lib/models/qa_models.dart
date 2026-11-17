@@ -11,6 +11,7 @@ class QAEvidenceModel {
     this.eventType,
     this.detectedLabel,
     this.confidence,
+    this.sourceVideoId,
   });
 
   final int id;
@@ -24,6 +25,7 @@ class QAEvidenceModel {
   final String? eventType;
   final String? detectedLabel;
   final double? confidence;
+  final String? sourceVideoId;
 
   factory QAEvidenceModel.fromJson(Map<String, dynamic> json) {
     return QAEvidenceModel(
@@ -40,6 +42,7 @@ class QAEvidenceModel {
       eventType: json['event_type'] as String?,
       detectedLabel: json['detected_label'] as String?,
       confidence: (json['confidence'] as num?)?.toDouble(),
+      sourceVideoId: json['source_video_id'] as String?,
     );
   }
 

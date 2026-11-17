@@ -86,6 +86,7 @@ class QAService {
     int? conversationId,
     int? cameraId,
     String? sessionOrVideoId,
+    List<String>? sessionOrVideoIds,
   }) async {
     final response = await _post(
       _uri('/qa/ask'),
@@ -95,6 +96,7 @@ class QAService {
         'conversation_id': conversationId,
         'camera_id': cameraId,
         'session_or_video_id': sessionOrVideoId,
+        'session_or_video_ids': sessionOrVideoIds,
       }),
     );
     _ensureSuccess(response);
@@ -167,6 +169,9 @@ class QAService {
       jsonDecode(response.body) as Map<String, dynamic>,
     );
   }
+
+  String videoContentUrl(String videoId) =>
+      '$baseUrl/qa/videos/$videoId/content';
 
   Future<void> deleteUploadedVideo(String videoId) async {
     final response = await _delete(_uri('/qa/videos/$videoId'));
