@@ -1,7 +1,9 @@
-import 'dart:typed_data';
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:app_flutter/services/qa_service.dart';
+import 'package:app_flutter/services/security_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -117,6 +119,64 @@ void main() {
     expect(
       String.fromCharCodes(capturedRequest.bodyBytes),
       contains('demo.mp4'),
+    );
+  });
+
+  test(
+    'askQuestion allows responses longer than the regular timeout',
+    () async {
+      final client = MockClient((request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        return http.Response.bytes(
+          utf8.encode(
+            jsonEncode({
+              'id': 9,
+              'conversation_id': 7,
+              'user_query_vi': 'Có ai không?',
+              'translated_query_en': 'Is anyone there?',
+              'response_vi': 'Không phát hiện ai.',
+              'question_type': 'identity',
+              'created_at': 'now',
+              'evidences': <dynamic>[],
+            }),
+          ),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      final service = QAService(
+        client: client,
+        baseUrl: 'http://backend.test',
+        requestTimeout: const Duration(milliseconds: 5),
+        askTimeout: const Duration(milliseconds: 100),
+      );
+
+      final answer = await service.askQuestion(question: 'Có ai không?');
+
+      expect(answer.responseVi, 'Không phát hiện ai.');
+    },
+  );
+
+  test('askQuestion reports a friendly timeout error', () async {
+    final client = MockClient((request) async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      return http.Response('{}', 200);
+    });
+    final service = QAService(
+      client: client,
+      baseUrl: 'http://backend.test',
+      askTimeout: const Duration(milliseconds: 5),
+    );
+
+    await expectLater(
+      service.askQuestion(question: 'Có ai không?'),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.toString(),
+          'message',
+          'Phản hồi AI mất quá nhiều thời gian. Vui lòng thử lại.',
+        ),
+      ),
     );
   });
 }

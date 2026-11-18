@@ -1734,6 +1734,25 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
     def get_uploaded_video_status(self, video_id: str) -> QAUploadedVideo:
         return self._get_uploaded_video(video_id)
 
+    def get_uploaded_video_content(self, video_id: str) -> tuple[Path, str]:
+        """Return a validated source-video path and its original display name."""
+        row = self.connection.execute(
+            "SELECT filename, file_path FROM qa_uploaded_videos WHERE video_id = ?",
+            (video_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError(f"Uploaded video '{video_id}' not found")
+
+        try:
+            path = self._cleanup_path(row["file_path"], self.uploads_dir)
+        except QAVideoCleanupError as exc:
+            # A malformed database path must not disclose or serve an arbitrary
+            # file outside the upload directory.
+            raise ValueError(f"Uploaded video '{video_id}' is unavailable") from exc
+        if not path.is_file():
+            raise ValueError(f"Uploaded video '{video_id}' file is unavailable")
+        return path, row["filename"]
+
     def delete_uploaded_video(self, video_id: str) -> None:
         with self.index_manager.lifecycle_lock:
             row = self.connection.execute(

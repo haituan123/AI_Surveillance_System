@@ -1215,6 +1215,56 @@ class QARoutesTestCase(unittest.TestCase):
     def test_missing_uploaded_video_still_returns_404(self):
         self.assertEqual(self.client.delete("/qa/videos/missing").status_code, 404)
 
+    def test_uploaded_video_content_streams_only_registered_upload(self):
+        conversation = self.service.create_conversation("Playback")
+        video_path = self.uploads / "camera clip.mp4"
+        video_path.write_bytes(b"fake-mp4-content")
+        self.connection.execute(
+            """
+            INSERT INTO qa_uploaded_videos (
+                conversation_id, video_id, filename, file_path, status
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                conversation.id,
+                "qa_upload_playback",
+                "camera clip.mp4",
+                str(video_path),
+                "completed",
+            ),
+        )
+        self.connection.commit()
+
+        response = self.client.get("/qa/videos/qa_upload_playback/content")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"fake-mp4-content")
+        self.assertEqual(response.headers["content-type"], "video/mp4")
+        self.assertEqual(response.headers["cache-control"], "private, no-store")
+
+    def test_uploaded_video_content_missing_file_returns_404(self):
+        conversation = self.service.create_conversation("Missing playback")
+        self.connection.execute(
+            """
+            INSERT INTO qa_uploaded_videos (
+                conversation_id, video_id, filename, file_path, status
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                conversation.id,
+                "qa_upload_missing_content",
+                "missing.mp4",
+                str(self.uploads / "missing.mp4"),
+                "completed",
+            ),
+        )
+        self.connection.commit()
+
+        response = self.client.get("/qa/videos/qa_upload_missing_content/content")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn(str(self.uploads), response.text)
+
     def test_app_shutdown_stops_all_managers(self):
         with (
             patch("backend.main.ensure_runtime_directories"),

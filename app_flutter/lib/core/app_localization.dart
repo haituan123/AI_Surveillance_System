@@ -376,6 +376,8 @@ class AppTranslator {
     'Lỗi xóa video: ': 'Could not delete video: ',
     'Không thể thử lại: ': 'Could not retry: ',
     'Lỗi truy vấn AI: ': 'AI query failed: ',
+    'Phản hồi AI mất quá nhiều thời gian. Vui lòng thử lại.':
+        'The AI response took too long. Please try again.',
     'Yêu cầu thất bại': 'Request failed',
     'Phát hiện người trong khu vực ': 'Person detected in restricted area ',
     'Phát hiện người lảng vảng tại ': 'Person loitering at ',

@@ -1,0 +1,402 @@
+INFO:     127.0.0.1:51639 - "GET /health/readiness HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63566 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63567 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63569 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63568 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63574 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63572 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63570 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63577 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63573 - "GET /cameras HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63571 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63576 - "GET /logs?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63575 - "GET /qa/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63578 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63571 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63570 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63567 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63569 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63579 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63577 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63576 - "GET /logs?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63580 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63581 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63576 - "GET /logs?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59417 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59418 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59420 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59419 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59421 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59422 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59423 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59424 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59422 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59420 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59421 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59426 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59425 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59427 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59428 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59429 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59430 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59431 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59432 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59434 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59433 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59436 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59435 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59437 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59438 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59436 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59432 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59434 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59435 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59439 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59440 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59437 - "GET /logs?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59442 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59443 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59437 - "GET /logs?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53313 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53314 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53316 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53315 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53317 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53318 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53319 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53320 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53321 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53322 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53323 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53324 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53326 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53325 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53327 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53328 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53329 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61894 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61895 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53328 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53327 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61896 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61897 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61898 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61900 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61899 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61901 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61902 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61903 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61904 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61905 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61906 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61907 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61908 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61910 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61909 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61912 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61911 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61913 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61914 - "POST /qa/conversations HTTP/1.1" 201 Created
+INFO:     127.0.0.1:61916 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61917 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61918 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61919 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61920 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61922 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61921 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61924 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61923 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61925 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "POST /qa/conversations/1/videos HTTP/1.1" 201 Created
+INFO:     127.0.0.1:61927 - "GET /qa/videos/qa_upload_2d623a0280bb/content HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61928 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61929 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61930 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+Creating new Ultralytics Settings v0.0.8 file  
+View Ultralytics Settings with 'yolo settings' or at 'C:\Users\Admin\AppData\Roaming\Ultralytics\settings.json'
+Update Settings with 'yolo settings key=value', i.e. 'yolo settings runs_dir=path/to/dir'. For help see https://docs.ultralytics.com/usage/settings
+INFO:     127.0.0.1:61926 - "POST /qa/conversations/1/videos HTTP/1.1" 201 Created
+INFO:     127.0.0.1:61935 - "GET /qa/videos/qa_upload_7441d526ce99/content HTTP/1.1" 404 Not Found
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 0% ──────────── 40.0KB/6.2MB 105.4KB/s 0.1s<1:00[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 2% ──────────── 184.0KB/6.2MB 334.5KB/s 0.3s<18.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 3% ──────────── 232.0KB/6.2MB 326.7KB/s 0.4s<18.9s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 4% ╸─────────── 296.0KB/6.2MB 389.9KB/s 0.6s<15.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 5% ╸─────────── 344.0KB/6.2MB 405.7KB/s 0.7s<14.9s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 0% ──────────── 56.0KB/6.2MB 166.4KB/s 0.1s<38.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 6% ╸─────────── 392.0KB/6.2MB 392.3KB/s 0.8s<15.3s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 2% ──────────── 184.0KB/6.2MB 1.2MB/s 0.2s<5.0s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 6% ╸─────────── 424.0KB/6.2MB 366.4KB/s 0.9s<16.3s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 14% ━╸────────── 904.0KB/6.2MB 7.0MB/s 0.3s<0.8s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 59% ━━━━━━━───── 3.7/6.2MB 27.7MB/s 0.4s<0.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 87% ━━━━━━━━━━╸─ 5.5/6.2MB 14.6MB/s 0.5s<0.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 100% ━━━━━━━━━━━━ 6.2MB 11.6MB/s 0.5s
+INFO:     127.0.0.1:61937 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61938 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61940 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61939 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61942 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61941 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61943 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 6% ╸─────────── 440.0KB/6.2MB 262.5KB/s 1.7s<22.7s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 7% ╸─────────── 472.0KB/6.2MB 266.6KB/s 1.8s<22.2s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 8% ━─────────── 536.0KB/6.2MB 372.7KB/s 1.9s<15.7s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 9% ━─────────── 576.0KB/6.2MB 339.9KB/s 2.1s<17.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 10% ━─────────── 656.0KB/6.2MB 454.7KB/s 2.2s<12.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 11% ━─────────── 704.0KB/6.2MB 435.4KB/s 2.3s<13.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 13% ━╸────────── 864.0KB/6.2MB 1.4MB/s 2.4s<4.0s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 15% ━╸────────── 960.0KB/6.2MB 577.0KB/s 2.5s<9.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 15% ━╸────────── 992.0KB/6.2MB 468.0KB/s 2.7s<11.5sINFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 16% ━╸────────── 1.0/6.2MB 353.8KB/s 3.0s<15.2s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 16% ━╸────────── 1.0/6.2MB 256.6KB/s 3.6s<20.9s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 16% ━━────────── 1.0/6.2MB 204.1KB/s 4.0s<26.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 17% ━━────────── 1.1/6.2MB 213.8KB/s 4.1s<24.8s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 17% ━━────────── 1.1/6.2MB 227.7KB/s 4.2s<23.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 18% ━━────────── 1.1/6.2MB 198.3KB/s 4.4s<26.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 18% ━━────────── 1.2/6.2MB 256.5KB/s 4.5s<20.2s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 19% ━━────────── 1.2/6.2MB 327.1KB/s 4.7s<15.7sINFO:     127.0.0.1:61926 - "POST /qa/conversations/1/videos HTTP/1.1" 201 Created
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 20% ━━────────── 1.3/6.2MB 317.9KB/s 4.8s<16.0sINFO:     127.0.0.1:61944 - "GET /qa/videos/qa_upload_cff0edde8b0f/content HTTP/1.1" 404 Not Found
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 21% ━━╸───────── 1.3/6.2MB 288.2KB/s 5.0s<17.5s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 21% ━━╸───────── 1.4/6.2MB 308.1KB/s 5.1s<16.2s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 22% ━━╸───────── 1.4/6.2MB 297.9KB/s 5.2s<16.7s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 23% ━━╸───────── 1.4/6.2MB 274.4KB/s 5.4s<17.9s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 42% ━━━━━─────── 2.6/6.2MB 10.5MB/s 5.5s<0.3s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 43% ━━━━━─────── 2.7/6.2MB 427.2KB/s 5.6s<8.5s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 44% ━━━━━─────── 2.8/6.2MB 411.3KB/s 5.8s<8.7s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 45% ━━━━━─────── 2.8/6.2MB 526.1KB/s 5.9s<6.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 46% ━━━━━╸────── 2.9/6.2MB 555.1KB/s 6.0s<6.2s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 46% ━━━━━╸────── 2.9/6.2MB 433.8KB/s 6.1s<7.8s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 47% ━━━━━╸────── 3.0/6.2MB 369.4KB/s 6.2s<9.1sINFO:     127.0.0.1:61946 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61947 - "GET /members HTTP/1.1" 200 OK
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 47% ━━━━━╸────── 3.0/6.2MB 335.8KB/s 6.3s<9.9s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 48% ━━━━━╸────── 3.0/6.2MB 401.6KB/s 6.5s<8.2sINFO:     127.0.0.1:61948 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 50% ━━━━━━────── 3.2/6.2MB 984.4KB/s 6.6s<3.2s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 51% ━━━━━━────── 3.2/6.2MB 463.5KB/s 6.7s<6.7s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 51% ━━━━━━────── 3.2/6.2MB 360.7KB/s 6.8s<8.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 52% ━━━━━━────── 3.3/6.2MB 376.3KB/s 6.9s<8.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 53% ━━━━━━────── 3.4/6.2MB 452.6KB/s 7.1s<6.5s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 54% ━━━━━━╸───── 3.4/6.2MB 471.2KB/s 7.2s<6.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 55% ━━━━━━╸───── 3.5/6.2MB 417.2KB/s 7.3s<6.9s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 55% ━━━━━━╸───── 3.5/6.2MB 379.9KB/s 7.4s<7.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 56% ━━━━━━╸───── 3.5/6.2MB 355.8KB/s 7.5s<7.9s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 56% ━━━━━━╸───── 3.5/6.2MB 279.0KB/s 7.7s<10.0sINFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 56% ━━━━━━╸───── 3.5/6.2MB 218.1KB/s 7.9s<12.7s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 57% ━━━━━━╸───── 3.6/6.2MB 178.4KB/s 8.1s<15.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 57% ━━━━━━╸───── 3.6/6.2MB 133.3KB/s 9.2s<20.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 58% ━━━━━━╸───── 3.6/6.2MB 161.8KB/s 9.3s<16.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 59% ━━━━━━━───── 3.7/6.2MB 348.4KB/s 9.4s<7.5s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 61% ━━━━━━━───── 3.9/6.2MB 1.4MB/s 9.6s<1.7s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 66% ━━━━━━━╸──── 4.2/6.2MB 2.1MB/s 9.7s<1.0s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 67% ━━━━━━━━──── 4.2/6.2MB 360.4KB/s 9.8s<5.8s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 68% ━━━━━━━━──── 4.3/6.2MB 486.6KB/s 9.9s<4.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 68% ━━━━━━━━──── 4.3/6.2MB 356.7KB/s 10.2s<5.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 69% ━━━━━━━━──── 4.3/6.2MB 271.3KB/s 10.7s<7.2sINFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 70% ━━━━━━━━──── 4.4/6.2MB 361.3KB/s 10.8s<5.2s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 70% ━━━━━━━━╸─── 4.4/6.2MB 346.7KB/s 10.9s<5.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 71% ━━━━━━━━╸─── 4.5/6.2MB 351.7KB/s 11.0s<5.2s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 72% ━━━━━━━━╸─── 4.5/6.2MB 384.0KB/s 11.1s<4.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 75% ━━━━━━━━━─── 4.7/6.2MB 2.1MB/s 11.2s<0.7sINFO:     127.0.0.1:61950 - "GET /health HTTP/1.1" 200 OK
+download_path: D:\HomePage_D\AI_Surveillance_System\backend\models\insightface\models\buffalo_l
+Downloading D:\HomePage_D\AI_Surveillance_System\backend\models\insightface\models\buffalo_l.zip from https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip...
+INFO:     127.0.0.1:61951 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61953 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61955 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61954 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61952 - "GET /members HTTP/1.1" 200 OK
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 78% ━━━━━━━━━─── 4.9/6.2MB 1.4MB/s 11.3s<1.0s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 80% ━━━━━━━━━╸── 5.0/6.2MB 1.2MB/s 11.4s<1.0sINFO:     127.0.0.1:61957 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 81% ━━━━━━━━━╸── 5.1/6.2MB 444.0KB/s 11.5s<2.7s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 81% ━━━━━━━━━╸── 5.1/6.2MB 371.9KB/s 11.7s<3.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 82% ━━━━━━━━━╸── 5.1/6.2MB 328.9KB/s 11.8s<3.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 82% ━━━━━━━━━╸── 5.2/6.2MB 326.0KB/s 11.9s<3.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 83% ━━━━━━━━━╸── 5.2/6.2MB 264.7KB/s 12.1s<4.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 83% ━━━━━━━━━━── 5.2/6.2MB 206.2KB/s 12.5s<5.1s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 84% ━━━━━━━━━━── 5.2/6.2MB 230.0KB/s 12.6s<4.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 84% ━━━━━━━━━━── 5.3/6.2MB 271.7KB/s 12.8s<3.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 85% ━━━━━━━━━━── 5.4/6.2MB 368.5KB/s 12.9s<2.5s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 86% ━━━━━━━━━━── 5.4/6.2MB 440.6KB/s 13.0s<1.9s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 87% ━━━━━━━━━━╸─ 5.5/6.2MB 441.1KB/s 13.1s<1.8s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 90% ━━━━━━━━━━╸─ 5.6/6.2MB 1.4MB/s 13.2s<0.4s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 90% ━━━━━━━━━━╸─ 5.7/6.2MB 368.9KB/s 13.4s<1.6s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 91% ━━━━━━━━━━╸─ 5.7/6.2MB 329.9KB/s 13.5s<1.7s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 91% ━━━━━━━━━━━─ 5.7/6.2MB 288.6KB/s 13.6s<1.8sINFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 92% ━━━━━━━━━━━─ 5.8/6.2MB 262.7KB/s 13.8s<1.9s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 92% ━━━━━━━━━━━─ 5.8/6.2MB 254.0KB/s 14.0s<1.8s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 98% ━━━━━━━━━━━╸ 6.2/6.2MB 3.2MB/s 14.1s<0.0s[KDownloading https://github.com/ultralytics/assets/releases/download/v8.4.0/yolov8n.pt to 'D:\HomePage_D\AI_Surveillance_System\backend\models\yolo\yolov8n.pt': 100% ━━━━━━━━━━━━ 6.2MB 450.7KB/s 14.2s
+INFO:     127.0.0.1:61959 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61960 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61961 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61962 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61963 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61965 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61966 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61964 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61967 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61968 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+Applied providers: ['CPUExecutionProvider'], with options: {'CPUExecutionProvider': {}}
+find model: D:\HomePage_D\AI_Surveillance_System\backend\models\insightface\models\buffalo_l\1k3d68.onnx landmark_3d_68 ['None', 3, 192, 192] 0.0 1.0
+Applied providers: ['CPUExecutionProvider'], with options: {'CPUExecutionProvider': {}}
+find model: D:\HomePage_D\AI_Surveillance_System\backend\models\insightface\models\buffalo_l\2d106det.onnx landmark_2d_106 ['None', 3, 192, 192] 0.0 1.0
+Applied providers: ['CPUExecutionProvider'], with options: {'CPUExecutionProvider': {}}
+find model: D:\HomePage_D\AI_Surveillance_System\backend\models\insightface\models\buffalo_l\det_10g.onnx detection [1, 3, '?', '?'] 127.5 128.0
+Applied providers: ['CPUExecutionProvider'], with options: {'CPUExecutionProvider': {}}
+find model: D:\HomePage_D\AI_Surveillance_System\backend\models\insightface\models\buffalo_l\genderage.onnx genderage ['None', 3, 96, 96] 0.0 1.0
+Applied providers: ['CPUExecutionProvider'], with options: {'CPUExecutionProvider': {}}
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+find model: D:\HomePage_D\AI_Surveillance_System\backend\models\insightface\models\buffalo_l\w600k_r50.onnx recognition ['None', 3, 112, 112] 127.5 127.5
+set det-size: (640, 640)
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61969 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61970 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61971 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61972 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61973 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61975 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61974 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61976 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61977 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61978 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61980 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61977 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61981 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61982 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61985 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61977 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61987 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61986 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61988 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61989 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61990 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61982 - "GET /logs?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61991 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61988 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61992 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61982 - "GET /logs?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61994 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61996 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61997 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61998 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61995 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61999 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61926 - "GET /qa/conversations/1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62007 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61997 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61996 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62009 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62008 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61998 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62011 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62012 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62009 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61998 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62014 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62015 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62013 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62016 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62018 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62019 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62016 - "GET /logs?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62020 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62022 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62023 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62025 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62024 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62026 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62027 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62020 - "GET /logs?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62031 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62032 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62034 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62036 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62038 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62037 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62039 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62040 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62041 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62048 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62049 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62050 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62053 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62054 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62056 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62055 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62057 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62058 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62059 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62061 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62062 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62063 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62064 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62065 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62067 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62066 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62068 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62069 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62070 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62072 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62073 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62074 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62075 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62076 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62078 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62077 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62079 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62080 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62081 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62083 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62084 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62086 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62087 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62088 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62085 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62089 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62090 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62091 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62092 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62094 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62095 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62097 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62096 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62099 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62098 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62100 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62104 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62105 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62106 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62101 - "POST /qa/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62101 - "GET /qa/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62107 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62108 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62110 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62109 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62111 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62112 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62113 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62114 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62115 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62117 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62116 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62118 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62119 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62120 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62121 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62122 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62123 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59102 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59103 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59105 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59104 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59106 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59107 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59108 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59109 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59110 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59112 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59111 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59113 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59114 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59115 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59116 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59114 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59113 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59117 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59118 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59120 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59121 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59123 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59122 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59125 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59124 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59126 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59100 - "POST /qa/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59100 - "GET /qa/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59127 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59128 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59129 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51127 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51128 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51130 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51129 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51131 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51132 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51133 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51134 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51135 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51136 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51137 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51138 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51140 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51139 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51141 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51142 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51143 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51144 - "POST /qa/conversations HTTP/1.1" 201 Created
+INFO:     127.0.0.1:51144 - "GET /qa/conversations/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51145 - "GET /qa/videos/qa_upload_cff0edde8b0f/content HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51146 - "GET /qa/videos/qa_upload_7441d526ce99/content HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51147 - "GET /qa/videos/qa_upload_2d623a0280bb/content HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51144 - "GET /qa/conversations/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51149 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51150 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51151 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51152 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51153 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51155 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51154 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51156 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51157 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51158 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51159 - "POST /qa/conversations/2/videos HTTP/1.1" 201 Created
+INFO:     127.0.0.1:51169 - "GET /qa/videos/qa_upload_8711db09ddfe/content HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51159 - "GET /qa/conversations/2/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51182 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51183 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51159 - "GET /qa/conversations/2/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51193 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51194 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51196 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51195 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51197 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51198 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51208 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51218 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51219 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51221 - "GET /surveillance/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51220 - "GET /members HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51222 - "GET /alerts?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51223 - "GET /logs?limit=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51224 - "GET /alerts?limit=100 HTTP/1.1" 200 OK

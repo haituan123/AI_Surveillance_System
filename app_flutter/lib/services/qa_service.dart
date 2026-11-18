@@ -9,13 +9,20 @@ import '../models/qa_models.dart';
 import 'security_service.dart';
 
 class QAService {
-  QAService({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
-      baseUrl = baseUrl ?? ApiConfig.baseUrl;
+  QAService({
+    http.Client? client,
+    String? baseUrl,
+    Duration requestTimeout = const Duration(seconds: 25),
+    Duration askTimeout = const Duration(seconds: 150),
+  }) : _client = client ?? http.Client(),
+       baseUrl = baseUrl ?? ApiConfig.baseUrl,
+       _requestTimeout = requestTimeout,
+       _askTimeout = askTimeout;
 
   final http.Client _client;
   final String baseUrl;
-  static const _requestTimeout = Duration(seconds: 25);
+  final Duration _requestTimeout;
+  final Duration _askTimeout;
 
   Uri _uri(String path, [Map<String, String>? query]) =>
       Uri.parse('$baseUrl$path').replace(queryParameters: query);
@@ -27,8 +34,10 @@ class QAService {
     Uri uri, {
     Map<String, String>? headers,
     Object? body,
-  }) =>
-      _client.post(uri, headers: headers, body: body).timeout(_requestTimeout);
+    Duration? timeout,
+  }) => _client
+      .post(uri, headers: headers, body: body)
+      .timeout(timeout ?? _requestTimeout);
 
   Future<http.Response> _delete(Uri uri) =>
       _client.delete(uri).timeout(_requestTimeout);
@@ -88,17 +97,27 @@ class QAService {
     String? sessionOrVideoId,
     List<String>? sessionOrVideoIds,
   }) async {
-    final response = await _post(
-      _uri('/qa/ask'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'question': question,
-        'conversation_id': conversationId,
-        'camera_id': cameraId,
-        'session_or_video_id': sessionOrVideoId,
-        'session_or_video_ids': sessionOrVideoIds,
-      }),
-    );
+    late final http.Response response;
+    try {
+      response = await _post(
+        _uri('/qa/ask'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'question': question,
+          'conversation_id': conversationId,
+          'camera_id': cameraId,
+          'session_or_video_id': sessionOrVideoId,
+          'session_or_video_ids': sessionOrVideoIds,
+        }),
+        // The backend can try both the primary and fallback Gemini models.
+        // Keep this above their combined 2 x 60-second default budget.
+        timeout: _askTimeout,
+      );
+    } on TimeoutException catch (_) {
+      throw const ApiException(
+        'Phản hồi AI mất quá nhiều thời gian. Vui lòng thử lại.',
+      );
+    }
     _ensureSuccess(response);
     return QAMessageModel.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
