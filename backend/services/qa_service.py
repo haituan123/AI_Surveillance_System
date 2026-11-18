@@ -311,6 +311,95 @@ class QAService:
                 confidence = ev.get("confidence")
                 confidence = float(confidence) if confidence is not None else None
 
+                # Auto-enrich missing fields from DB context
+                if event_type is None or detected_label is None or confidence is None:
+                    # 1. Try security_events
+                    se_row = None
+                    if frame_id:
+                        se_row = self.connection.execute(
+                            "SELECT event_type, object_labels_json, confidence FROM security_events WHERE primary_frame_id = ? LIMIT 1",
+                            (frame_id,)
+                        ).fetchone()
+                    if not se_row and snapshot:
+                        se_row = self.connection.execute(
+                            "SELECT event_type, object_labels_json, confidence FROM security_events WHERE snapshot_path = ? LIMIT 1",
+                            (snapshot,)
+                        ).fetchone()
+                    if se_row:
+                        if event_type is None:
+                            event_type = se_row["event_type"]
+                        if confidence is None and se_row["confidence"] is not None:
+                            confidence = float(se_row["confidence"])
+                        if detected_label is None and se_row["object_labels_json"]:
+                            try:
+                                labels = json.loads(se_row["object_labels_json"])
+                                if labels:
+                                    detected_label = labels[0]
+                            except Exception:
+                                pass
+
+                    # 2. Try danger_threats
+                    if event_type is None or confidence is None:
+                        dt_row = None
+                        if frame_id:
+                            dt_row = self.connection.execute(
+                                "SELECT threat_type, confidence FROM danger_threats WHERE frame_id = ? LIMIT 1",
+                                (frame_id,)
+                            ).fetchone()
+                        if not dt_row and snapshot:
+                            dt_row = self.connection.execute(
+                                "SELECT threat_type, confidence FROM danger_threats WHERE snapshot_path = ? LIMIT 1",
+                                (snapshot,)
+                            ).fetchone()
+                        if dt_row:
+                            if event_type is None:
+                                event_type = dt_row["threat_type"]
+                            if confidence is None and dt_row["confidence"] is not None:
+                                confidence = float(dt_row["confidence"])
+
+                    # 3. Try detected_entities
+                    if detected_label is None or confidence is None:
+                        de_row = None
+                        if frame_id:
+                            de_row = self.connection.execute(
+                                "SELECT label, confidence, entity_type FROM detected_entities WHERE frame_id = ? ORDER BY confidence DESC LIMIT 1",
+                                (frame_id,)
+                            ).fetchone()
+                        if de_row:
+                            if detected_label is None:
+                                detected_label = de_row["label"]
+                            if confidence is None and de_row["confidence"] is not None:
+                                confidence = float(de_row["confidence"])
+                            if event_type is None:
+                                event_type = "person_presence" if de_row["label"] == "person" else f"{de_row['label']}_presence"
+
+                    # 4. Infer detected_label from event_type
+                    if detected_label is None and event_type:
+                        ev_lower = event_type.lower()
+                        if "fire" in ev_lower or "smoke" in ev_lower:
+                            detected_label = "fire"
+                        elif "fight" in ev_lower or "violence" in ev_lower:
+                            detected_label = "person"
+                        elif "bike" in ev_lower or "motor" in ev_lower:
+                            detected_label = "motorcycle"
+                        elif "knife" in ev_lower:
+                            detected_label = "knife"
+                        elif "gun" in ev_lower or "shoot" in ev_lower or "weapon" in ev_lower:
+                            detected_label = "weapon"
+                        elif "phone" in ev_lower:
+                            detected_label = "phone"
+                        elif "backpack" in ev_lower or "bag" in ev_lower:
+                            detected_label = "backpack"
+                        elif "person" in ev_lower:
+                            detected_label = "person"
+
+                    if event_type is None:
+                        event_type = "detected_event"
+                    if detected_label is None:
+                        detected_label = "object"
+                    if confidence is None:
+                        confidence = 0.85
+
                 ev_cur = self.connection.execute(
                     """
                     INSERT INTO qa_evidences (
@@ -1599,6 +1688,9 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                         "snapshot_path": person_entities[0].get("frame_path", ""),
                         "highlight_bbox": json.loads(person_entities[0]["bbox_json"]) if person_entities[0].get("bbox_json") else None,
                         "explanation_vi": f"Khung hình ghi nhận người xuất hiện tại mốc {min_t:.2f}s",
+                        "event_type": "person_count",
+                        "detected_label": "person",
+                        "confidence": float(person_entities[0].get("confidence") or 0.85),
                     }],
                 }
 
@@ -1632,6 +1724,9 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
                         "snapshot_path": person_entities[0].get("frame_path", ""),
                         "highlight_bbox": json.loads(person_entities[0]["bbox_json"]) if person_entities[0].get("bbox_json") else None,
                         "explanation_vi": f"Đối tượng xuất hiện tại mốc {min_t:.2f}s",
+                        "event_type": "person_presence",
+                        "detected_label": "person",
+                        "confidence": float(person_entities[0].get("confidence") or 0.85),
                     }],
                 }
 

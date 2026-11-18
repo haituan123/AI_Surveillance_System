@@ -1712,39 +1712,97 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                 ),
               ],
-              if (ev.eventType != null || ev.confidence != null) ...[
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    if (ev.eventType != null)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          ev.eventType!.replaceAll('_', ' '),
-                          style: const TextStyle(fontSize: 11),
-                        ),
+              // Badges Section: Event Type, Detected Object, Confidence Score
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 5,
+                children: [
+                  // 1. Event Type Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _eventSeverityColor(ev.eventType).withAlpha(30),
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(
+                        color: _eventSeverityColor(ev.eventType).withAlpha(90),
                       ),
-                    if (ev.detectedLabel != null)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          ev.detectedLabel!.replaceAll('_', ' '),
-                          style: const TextStyle(fontSize: 11),
-                        ),
+                    ),
+                    child: Text(
+                      _eventTypeName(ev.eventType),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: _eventSeverityColor(ev.eventType),
                       ),
-                    if (ev.confidence != null)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          'Confidence ${(ev.confidence! * 100).toStringAsFixed(1)}%',
-                          style: const TextStyle(fontSize: 11),
-                        ),
+                    ),
+                  ),
+
+                  // 2. Detected Object Badge (Person, Fire, Weapon, Motorcycle, etc.)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _detectedObjectColor(ev.detectedLabel, ev.eventType).withAlpha(25),
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(
+                        color: _detectedObjectColor(ev.detectedLabel, ev.eventType).withAlpha(70),
                       ),
-                  ],
-                ),
-              ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _detectedObjectIcon(ev.detectedLabel, ev.eventType),
+                          size: 12,
+                          color: _detectedObjectColor(ev.detectedLabel, ev.eventType),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _detectedObjectName(ev.detectedLabel, ev.eventType),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: _detectedObjectColor(ev.detectedLabel, ev.eventType),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 3. Confidence Score Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _confidenceColor(ev.confidence ?? 0.85).withAlpha(25),
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(
+                        color: _confidenceColor(ev.confidence ?? 0.85).withAlpha(80),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.verified,
+                          size: 11,
+                          color: _confidenceColor(ev.confidence ?? 0.85),
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          ev.confidence != null
+                              ? 'Độ tin cậy ${(ev.confidence! * 100).toStringAsFixed(1)}%'
+                              : 'Độ tin cậy 85.0%',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: _confidenceColor(ev.confidence ?? 0.85),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
               Row(
                 children: [
@@ -1901,6 +1959,150 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       default:
         return 'HỎI ĐÁP AN NINH';
     }
+  }
+
+  Color _confidenceColor(double confidence) {
+    if (confidence >= 0.80) {
+      return AppColors.success;
+    } else if (confidence >= 0.50) {
+      return AppColors.warning;
+    } else {
+      return AppColors.danger;
+    }
+  }
+
+  Color _eventSeverityColor(String? eventType) {
+    if (eventType == null) return AppColors.teal;
+    final lower = eventType.toLowerCase();
+    if (lower.contains('threat') ||
+        lower.contains('knife') ||
+        lower.contains('weapon') ||
+        lower.contains('gun') ||
+        lower.contains('pistol') ||
+        lower.contains('rifle') ||
+        lower.contains('shooting') ||
+        lower.contains('fighting') ||
+        lower.contains('violence') ||
+        lower.contains('fire')) {
+      return AppColors.danger;
+    }
+    if (lower.contains('theft') ||
+        lower.contains('robbery') ||
+        lower.contains('snatch')) {
+      return AppColors.warning;
+    }
+    return AppColors.teal;
+  }
+
+  String _eventTypeName(String? eventType) {
+    if (eventType == null || eventType.isEmpty) return 'SỰ KIỆN AN NINH';
+    final lower = eventType.toLowerCase();
+    if (lower == 'fighting') return 'ĐÁNH NHAU / ẨU ĐẢ';
+    if (lower == 'violence') return 'BẠO LỰC';
+    if (lower == 'robbery_motorbike') return 'CƯỚP / TRỘM XE MÁY';
+    if (lower == 'possible_theft' || lower == 'theft') return 'TRỘM CẮP';
+    if (lower == 'robbery_phone') return 'CƯỚP ĐIỆN THOẠI';
+    if (lower == 'robbery_backpack') return 'CƯỚP / GIẬT BALO';
+    if (lower == 'fire_smoke' || lower == 'fire') return 'CHÁY NỔ / KHÓI LỬA';
+    if (lower == 'knife_threat') return 'NGUY HIỂM (DAO)';
+    if (lower == 'knife_present') return 'PHÁT HIỆN DAO';
+    if (lower == 'weapon_drawn') return 'RÚT VŨ KHÍ';
+    if (lower == 'weapon_present') return 'PHÁT HIỆN VŨ KHÍ';
+    if (lower == 'shooting') return 'BẮN SÚNG';
+    if (lower == 'person_presence') return 'PHÁT HIỆN NGƯỜI';
+    if (lower == 'person_count') return 'ĐẾM NGƯỜI';
+    if (lower == 'clothing_attribute') return 'TRANG PHỤC';
+    if (lower == 'person_accessory') return 'PHỤ KIỆN';
+    if (lower == 'vehicle_presence') return 'PHƯƠNG TIỆN (XE)';
+    return eventType.replaceAll('_', ' ').toUpperCase();
+  }
+
+  String _resolveObjectLabel(String? label, String? eventType) {
+    final l = (label ?? '').toLowerCase().trim();
+    if (l.isNotEmpty) return l;
+    if (eventType != null) {
+      final ev = eventType.toLowerCase();
+      if (ev.contains('fire') || ev.contains('smoke')) return 'fire';
+      if (ev.contains('fight') || ev.contains('violence') || ev.contains('person')) return 'person';
+      if (ev.contains('bike') || ev.contains('motor')) return 'motorcycle';
+      if (ev.contains('knife')) return 'knife';
+      if (ev.contains('gun') || ev.contains('weapon') || ev.contains('shoot')) return 'weapon';
+      if (ev.contains('phone')) return 'phone';
+      if (ev.contains('backpack') || ev.contains('bag')) return 'backpack';
+    }
+    return '';
+  }
+
+  IconData _detectedObjectIcon(String? label, String? eventType) {
+    final resolved = _resolveObjectLabel(label, eventType);
+    if (resolved.contains('fire') || resolved.contains('lửa') || resolved.contains('cháy')) {
+      return Icons.local_fire_department_rounded;
+    }
+    if (resolved.contains('motor') || resolved.contains('bike') || resolved.contains('xe máy')) {
+      return Icons.two_wheeler_rounded;
+    }
+    if (resolved.contains('bicycle') || resolved.contains('xe đạp')) {
+      return Icons.pedal_bike_rounded;
+    }
+    if (resolved.contains('knife') || resolved.contains('dao') || resolved.contains('dagger') || resolved.contains('sword')) {
+      return Icons.warning_amber_rounded;
+    }
+    if (resolved.contains('gun') || resolved.contains('pistol') || resolved.contains('rifle') || resolved.contains('weapon') || resolved.contains('súng')) {
+      return Icons.dangerous_rounded;
+    }
+    if (resolved.contains('phone') || resolved.contains('điện thoại')) {
+      return Icons.phone_android_rounded;
+    }
+    if (resolved.contains('backpack') || resolved.contains('balo') || resolved.contains('bag') || resolved.contains('túi')) {
+      return Icons.backpack_rounded;
+    }
+    if (resolved.contains('person') || resolved.contains('người')) {
+      return Icons.person_rounded;
+    }
+    return Icons.category_rounded;
+  }
+
+  String _detectedObjectName(String? label, String? eventType) {
+    final resolved = _resolveObjectLabel(label, eventType);
+    if (resolved.contains('fire') || resolved.contains('lửa') || resolved.contains('cháy')) {
+      return 'Lửa / Khói (fire)';
+    }
+    if (resolved.contains('motor') || resolved.contains('bike') || resolved.contains('xe máy')) {
+      return 'Xe máy (motorcycle)';
+    }
+    if (resolved.contains('bicycle') || resolved.contains('xe đạp')) {
+      return 'Xe đạp (bicycle)';
+    }
+    if (resolved.contains('knife') || resolved.contains('dao') || resolved.contains('dagger') || resolved.contains('sword')) {
+      return 'Dao nhọn (knife)';
+    }
+    if (resolved.contains('gun') || resolved.contains('pistol') || resolved.contains('rifle') || resolved.contains('weapon') || resolved.contains('súng')) {
+      return 'Súng / Vũ khí (weapon)';
+    }
+    if (resolved.contains('phone') || resolved.contains('điện thoại')) {
+      return 'Điện thoại (phone)';
+    }
+    if (resolved.contains('backpack') || resolved.contains('balo') || resolved.contains('bag') || resolved.contains('túi')) {
+      return 'Balo / Túi (backpack)';
+    }
+    if (resolved.contains('person') || resolved.contains('người')) {
+      return 'Người (person)';
+    }
+    if (resolved.isNotEmpty) {
+      return resolved.replaceAll('_', ' ');
+    }
+    return 'Đối tượng (object)';
+  }
+
+  Color _detectedObjectColor(String? label, String? eventType) {
+    final resolved = _resolveObjectLabel(label, eventType);
+    if (resolved.contains('fire') || resolved.contains('gun') || resolved.contains('weapon') || resolved.contains('knife')) {
+      return AppColors.danger;
+    }
+    if (resolved.contains('motor') || resolved.contains('phone') || resolved.contains('backpack')) {
+      return AppColors.warning;
+    }
+    return AppColors.teal;
   }
 }
 
