@@ -91,8 +91,13 @@ SURVEILLANCE_OBJECT_CLASSES = {
 class ThreatAndObjectDetector:
     """Detects security threats (weapons, fire) and tracked surveillance objects (backpacks, phones)."""
 
-    def __init__(self, confidence_threshold: float = 0.25) -> None:
+    def __init__(
+        self,
+        confidence_threshold: float = 0.25,
+        weapon_confidence_threshold: float = 0.15,
+    ) -> None:
         self.confidence_threshold = confidence_threshold
+        self.weapon_confidence_threshold = weapon_confidence_threshold
 
     @staticmethod
     def detect_flame_regions(
@@ -139,7 +144,13 @@ class ThreatAndObjectDetector:
         for det in raw_detections:
             label = str(det.get("label", "")).lower()
             conf = float(det.get("confidence", 0.0))
-            if conf < self.confidence_threshold:
+            threshold = (
+                self.weapon_confidence_threshold
+                if label in THREAT_CLASS_MAP
+                and THREAT_CLASS_MAP[label][1] == EntityType.WEAPON
+                else self.confidence_threshold
+            )
+            if conf < threshold:
                 continue
 
             bbox = BoundingBox(

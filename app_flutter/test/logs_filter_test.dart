@@ -29,6 +29,20 @@ void main() {
     createdAt: '2026-11-18T08:01:00',
   );
 
+  SecurityEventModel event(String type, {String? label}) => SecurityEventModel(
+    id: type.hashCode,
+    sourceId: 'qa-video',
+    sourceType: 'qa_video',
+    sourceName: 'incident.mp4',
+    eventType: type,
+    startTimestamp: 2,
+    endTimestamp: 4,
+    confidence: 0.88,
+    detectedLabel: label,
+    status: 'open',
+    createdAt: '2026-11-18T08:01:00',
+  );
+
   test('person filters distinguish known and unknown detections', () {
     expect(SecurityRecordFilter.knownPerson.matchesLog(knownLog), isTrue);
     expect(SecurityRecordFilter.knownPerson.matchesLog(unknownLog), isFalse);
@@ -83,6 +97,29 @@ void main() {
         linkedAlerts: [fightingAlert],
       ),
       isFalse,
+    );
+  });
+
+  test('threat filters include indexed security events', () {
+    expect(
+      SecurityRecordFilter.fighting.matchesEvent(event('fighting')),
+      isTrue,
+    );
+    expect(
+      SecurityRecordFilter.fireSmoke.matchesEvent(
+        event('object_present', label: 'fire'),
+      ),
+      isTrue,
+    );
+    expect(
+      SecurityRecordFilter.shooting.matchesEvent(
+        event('object_present', label: 'knife'),
+      ),
+      isTrue,
+    );
+    expect(
+      SecurityRecordFilter.robberyTheft.matchesEvent(event('theft')),
+      isTrue,
     );
   });
 }

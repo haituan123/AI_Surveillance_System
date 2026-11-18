@@ -16,7 +16,6 @@ from backend.app.config import (
     GEMINI_TIMEOUT_SECONDS,
     SNAPSHOTS_DIR,
     TEMP_UPLOADS_DIR,
-    VIDEO_QA_ANALYSIS_FPS,
     VIDEO_UPLOAD_MAX_BYTES,
     resolve_storage_path,
     serialize_storage_path,
@@ -32,33 +31,12 @@ from backend.app.schemas import (
 )
 from backend.services.qa_video_index_manager import (
     QAVideoIndexManager,
+    calculate_sampling as calculate_video_qa_sampling,
     qa_video_index_manager,
 )
 from backend.services.qa_snapshot_storage import qa_video_snapshot_dir
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_SOURCE_VIDEO_FPS = 25.0
-DEFAULT_VIDEO_QA_ANALYSIS_FPS = 8.0
-
-
-def calculate_video_qa_sampling(
-    input_fps: float,
-    requested_analysis_fps: float,
-) -> tuple[float, int, float]:
-    """Return safe source FPS, frame interval, and effective analysis FPS."""
-    safe_input_fps = float(input_fps)
-    if not math.isfinite(safe_input_fps) or safe_input_fps <= 0:
-        safe_input_fps = DEFAULT_SOURCE_VIDEO_FPS
-
-    safe_requested_fps = float(requested_analysis_fps)
-    if not math.isfinite(safe_requested_fps) or safe_requested_fps <= 0:
-        safe_requested_fps = DEFAULT_VIDEO_QA_ANALYSIS_FPS
-
-    sample_interval = max(1, round(safe_input_fps / safe_requested_fps))
-    effective_analysis_fps = safe_input_fps / sample_interval
-    return safe_input_fps, sample_interval, effective_analysis_fps
-
 
 class QAVideoCleanupError(RuntimeError):
     """Required Q&A filesystem cleanup failed; DB metadata is retained."""
@@ -181,11 +159,14 @@ class QAService:
         for msg in message_rows:
             evidence_rows = self.connection.execute(
                 """
-                SELECT id, message_id, frame_id, start_timestamp, end_timestamp,
-                       snapshot_path, highlight_bbox_json, explanation_vi,
-                       event_type, detected_label, confidence
-                FROM qa_evidences
-                WHERE message_id = ?
+                SELECT qe.id, qe.message_id, qe.frame_id, qe.start_timestamp,
+                       qe.end_timestamp, qe.snapshot_path,
+                       qe.highlight_bbox_json, qe.explanation_vi,
+                       qe.event_type, qe.detected_label, qe.confidence,
+                       vf.session_or_video_id AS source_video_id
+                FROM qa_evidences qe
+                LEFT JOIN video_frames vf ON vf.id = qe.frame_id
+                WHERE qe.message_id = ?
                 ORDER BY start_timestamp ASC
                 """,
                 (msg["id"],),
@@ -208,6 +189,7 @@ class QAService:
                         if e["confidence"] is not None
                         else None
                     ),
+                    source_video_id=e["source_video_id"],
                 )
                 for e in evidence_rows
             ]
@@ -250,22 +232,39 @@ class QAService:
                 )
 
     def ask(self, request: QAAskRequest) -> QAMessage:
-        """Process a Vietnamese query: translate to English, retrieve DB context, reason with Gemini, respond in Vietnamese."""
+        """Answer a scoped surveillance question and persist validated evidence."""
         conv_id = request.conversation_id
         if not conv_id:
             conv = self.create_conversation(title=request.question[:40] + ("..." if len(request.question) > 40 else ""))
             conv_id = conv.id
 
         # 1. Trích xuất ngữ cảnh video/camera từ Database
-        context_data = self._gather_surveillance_context(
-            camera_id=request.camera_id,
-            session_or_video_id=request.session_or_video_id,
-        )
+        requested_ids = list(dict.fromkeys(request.session_or_video_ids or []))
+        if request.session_or_video_id and request.session_or_video_id not in requested_ids:
+            requested_ids.insert(0, request.session_or_video_id)
+        if requested_ids:
+            contexts = [
+                self._gather_surveillance_context(
+                    camera_id=request.camera_id,
+                    session_or_video_id=source_id,
+                )
+                for source_id in requested_ids
+            ]
+            context_data = {
+                key: [row for context in contexts for row in context.get(key, [])]
+                for key in ("entities", "threats", "security_events", "alerts")
+            }
+        else:
+            context_data = self._gather_surveillance_context(
+                camera_id=request.camera_id,
+                session_or_video_id=None,
+            )
 
         # 2. Suy luận bằng Gemini API (hoặc fallback nếu chưa cấu hình key)
         qa_result = self._reason_with_gemini(
             user_question=request.question,
             context_data=context_data,
+            response_language=request.response_language,
         )
 
         returned_evidences = qa_result.get("evidences", [])
@@ -346,6 +345,7 @@ class QAService:
                         event_type=event_type,
                         detected_label=detected_label,
                         confidence=confidence,
+                        source_video_id=ev.get("source_video_id"),
                     )
                 )
 
@@ -426,21 +426,30 @@ class QAService:
             threat_ids.update(threat_ids_by_path.get(path, set()))
 
         current_frames: dict[int, set[Path]] = {}
+        current_sources: dict[int, str] = {}
         if frame_ids:
             parameters = list(frame_ids)
             conditions = [f"id IN ({','.join('?' for _ in parameters)})"]
-            if request.session_or_video_id is not None:
-                conditions.append("session_or_video_id = ?")
-                parameters.append(request.session_or_video_id)
+            allowed_sources = list(dict.fromkeys(
+                (request.session_or_video_ids or [])
+                + ([request.session_or_video_id] if request.session_or_video_id else [])
+            ))
+            if allowed_sources:
+                conditions.append(
+                    f"session_or_video_id IN ({','.join('?' for _ in allowed_sources)})"
+                )
+                parameters.extend(allowed_sources)
             if request.camera_id is not None:
                 conditions.append("camera_id = ?")
                 parameters.append(request.camera_id)
             rows = self.connection.execute(
-                "SELECT id, frame_path FROM video_frames WHERE " + " AND ".join(conditions), parameters,
+                "SELECT id, frame_path, session_or_video_id FROM video_frames WHERE "
+                + " AND ".join(conditions), parameters,
             ).fetchall()
             for row in rows:
                 path = self._canonical_snapshot_path(row["frame_path"])
                 current_frames[row["id"]] = {path} if path is not None else set()
+                current_sources[row["id"]] = row["session_or_video_id"]
 
         if threat_ids and current_frames:
             rows = self.connection.execute(
@@ -480,7 +489,13 @@ class QAService:
                     continue
                 # Every new image card is owned by a surviving frame, including
                 # snapshot-only Gemini evidence. Keep canonical storage spelling.
-                evidence = {**evidence, "frame_id": owners.pop(), "snapshot_path": serialize_storage_path(path)}
+                owner = owners.pop()
+                evidence = {
+                    **evidence,
+                    "frame_id": owner,
+                    "snapshot_path": serialize_storage_path(path),
+                    "source_video_id": current_sources.get(owner),
+                }
             # Textual/time-range evidence without an image or frame is valid too.
             valid.append(evidence)
         return valid
@@ -521,7 +536,8 @@ class QAService:
         # Lấy frames & entities
         entity_sql = f"""
             SELECT 
-                vf.id as frame_id, vf.timestamp_seconds, vf.frame_number, vf.frame_path,
+                vf.id as frame_id, vf.session_or_video_id,
+                vf.timestamp_seconds, vf.frame_number, vf.frame_path,
                 vf.person_count, vf.scene_caption_en,
                 de.label, de.entity_type, de.clothing_top_color, de.clothing_bottom_color,
                 de.accessories_json, de.movement_direction, de.action_label, de.bbox_json,
@@ -539,6 +555,7 @@ class QAService:
         # Lấy danger threats
         threat_sql = f"""
             SELECT dt.id AS threat_id, vf.id AS frame_id,
+                   vf.session_or_video_id,
                    dt.threat_type, dt.confidence, dt.snapshot_path,
                    dt.description_en, dt.bbox_json,
                    vf.timestamp_seconds
@@ -580,15 +597,32 @@ class QAService:
         ).fetchall()
 
         # Lấy alerts
-        alerts = self.connection.execute(
-            """
+        alert_conditions = []
+        alert_params: list[Any] = []
+        if camera_id is not None:
+            alert_conditions.append("a.camera_id = ?")
+            alert_params.append(camera_id)
+        # Uploaded Video Q&A events are represented by security_events and
+        # danger_threats. Live alerts have no uploaded-video source key.
+        if session_or_video_id is not None and camera_id is None:
+            alerts = []
+        else:
+            alert_where = (
+                f"WHERE {' AND '.join(alert_conditions)}"
+                if alert_conditions
+                else ""
+            )
+            alerts = self.connection.execute(
+                f"""
             SELECT a.alert_type, a.message, a.confidence, a.created_at, p.name as member_name
             FROM alerts a
             LEFT JOIN people p ON a.member_id = p.id
+            {alert_where}
             ORDER BY a.created_at DESC
             LIMIT 20
-            """
-        ).fetchall()
+                """,
+                alert_params,
+            ).fetchall()
 
         return {
             "entities": [dict(r) for r in entities],
@@ -597,10 +631,23 @@ class QAService:
             "alerts": [dict(r) for r in alerts],
         }
 
-    def _reason_with_gemini(self, user_question: str, context_data: dict[str, Any]) -> dict[str, Any]:
+    def _reason_with_gemini(
+        self,
+        user_question: str,
+        context_data: dict[str, Any],
+        response_language: str = "vi",
+    ) -> dict[str, Any]:
         """Prompt Gemini 1.5 Flash with structured context or fallback to heuristic response."""
         if not self.api_key:
-            return self._fallback_heuristic_qa(user_question, context_data)
+            if response_language == "vi":
+                return self._fallback_heuristic_qa(user_question, context_data)
+            return self._fallback_heuristic_qa(
+                user_question,
+                context_data,
+                response_language=response_language,
+            )
+
+        answer_language = "English" if response_language == "en" else "Vietnamese"
 
         prompt = f"""
 You are an expert AI Security & CCTV Surveillance Reasoning Assistant.
@@ -615,7 +662,7 @@ TASKS:
 1. Translate the user query into precise English ("translated_query_en").
 2. Determine question category ("question_type"): one of ["identity", "attribute", "threat", "temporal", "count", "object_reasoning", "general"].
 3. Perform step-by-step reasoning in English ("reasoning_en") based strictly on the provided CCTV evidence.
-4. Synthesize the final answer in natural, polite Vietnamese ("response_vi").
+4. Synthesize the final answer in natural, polite {answer_language} ("response_vi").
 5. Extract exact timestamps (in seconds), bounding boxes, snapshot paths, and explanations for evidence ("evidences").
 6. For clothing questions, distinguish clothing_top_color (áo) from clothing_bottom_color (quần).
 7. Only claim that a person wears or carries an accessory when that label appears in the person's accessories_json. Include the person's snapshot, timestamp, bounding box, and the accessory confidence.
@@ -694,10 +741,23 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
         logger.warning(
             "All configured Gemini models failed. Falling back to heuristic reasoning."
         )
-        return self._fallback_heuristic_qa(user_question, context_data)
+        if response_language == "vi":
+            return self._fallback_heuristic_qa(user_question, context_data)
+        return self._fallback_heuristic_qa(
+            user_question,
+            context_data,
+            response_language=response_language,
+        )
 
-    def _fallback_heuristic_qa(self, user_question: str, context_data: dict[str, Any]) -> dict[str, Any]:
+    def _fallback_heuristic_qa(
+        self,
+        user_question: str,
+        context_data: dict[str, Any],
+        response_language: str = "vi",
+    ) -> dict[str, Any]:
         """Local rule-based fallback when Gemini API is offline or not configured."""
+        if response_language == "en":
+            return self._fallback_heuristic_qa_en(user_question, context_data)
         q_lower = user_question.lower()
         threats = context_data.get("threats", [])
         security_events = context_data.get("security_events", [])
@@ -1657,6 +1717,81 @@ OUTPUT FORMAT: You MUST return ONLY a valid JSON object with NO markdown ticks, 
             "question_type": QAQuestionType.GENERAL,
             "reasoning_en": "Generic surveillance response synthesized from recorded logs.",
             "response_vi": f"Hệ thống đã ghi nhận câu hỏi: '{user_question}'. Dữ liệu hiện tại chưa ghi nhận sự việc liên quan.",
+            "evidences": [],
+        }
+
+    def _fallback_heuristic_qa_en(
+        self,
+        user_question: str,
+        context_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Small deterministic English fallback for offline/unavailable Gemini."""
+        events = context_data.get("security_events", [])
+        threats = context_data.get("threats", [])
+        entities = context_data.get("entities", [])
+        source = events[0] if events else (threats[0] if threats else None)
+        if source is not None:
+            event_type = str(
+                source.get("event_type") or source.get("threat_type") or "security event"
+            )
+            start = float(
+                source.get("start_timestamp", source.get("timestamp_seconds", 0.0))
+            )
+            end = float(source.get("end_timestamp", start))
+            label = source.get("detected_label")
+            if label is None:
+                labels = source.get("object_labels_json")
+                try:
+                    parsed = json.loads(labels) if isinstance(labels, str) else labels
+                    label = parsed[0] if parsed else None
+                except (TypeError, json.JSONDecodeError):
+                    label = None
+            snapshot = source.get("snapshot_path", "")
+            confidence = source.get("confidence")
+            frame_id = source.get("primary_frame_id", source.get("frame_id"))
+            readable = event_type.replace("_", " ")
+            return {
+                "translated_query_en": user_question,
+                "question_type": QAQuestionType.THREAT,
+                "reasoning_en": "Matched the question against indexed security events.",
+                "response_vi": (
+                    f"The indexed footage contains {readable} around {start:.2f}s."
+                ),
+                "evidences": [{
+                    "frame_id": frame_id,
+                    "start_timestamp": start,
+                    "end_timestamp": end,
+                    "snapshot_path": snapshot,
+                    "highlight_bbox": None,
+                    "explanation_vi": f"Indexed {readable} evidence",
+                    "event_type": event_type,
+                    "detected_label": label,
+                    "confidence": confidence,
+                }],
+            }
+
+        people = [
+            row for row in entities
+            if row.get("entity_type") == "person" or row.get("label") == "person"
+        ]
+        if people:
+            timestamps = [float(row.get("timestamp_seconds", 0.0)) for row in people]
+            return {
+                "translated_query_en": user_question,
+                "question_type": QAQuestionType.IDENTITY,
+                "reasoning_en": "Found indexed person detections.",
+                "response_vi": (
+                    f"People were detected between {min(timestamps):.2f}s and "
+                    f"{max(timestamps):.2f}s. No matching danger event was indexed."
+                ),
+                "evidences": [],
+            }
+
+        return {
+            "translated_query_en": user_question,
+            "question_type": QAQuestionType.GENERAL,
+            "reasoning_en": "No matching indexed evidence was found.",
+            "response_vi": "No relevant event was found in the indexed footage.",
             "evidences": [],
         }
 

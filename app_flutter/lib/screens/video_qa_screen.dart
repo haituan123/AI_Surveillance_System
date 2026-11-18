@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../core/app_localization.dart';
+import '../core/app_settings.dart';
 import '../core/api_config.dart';
 import '../models/qa_models.dart';
 import '../services/qa_service.dart';
@@ -344,6 +345,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         sessionOrVideoIds: _selectedScope == 'all'
             ? _uploadedVideos.map((video) => video.videoId).toList()
             : null,
+        responseLanguage: context.appSettings.isVietnamese ? 'vi' : 'en',
       );
 
       setState(() {
@@ -1583,6 +1585,104 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         value.contains('không thấy');
   }
 
+  String _evidenceEventLabel(String value) => switch (value) {
+    'fighting' || 'violence' => 'Fighting / violence',
+    'fire_smoke' => 'Fire / smoke',
+    'shooting' => 'Shooting',
+    'weapon_drawn' || 'weapon_present' => 'Weapon detected',
+    'knife_threat' || 'knife_present' => 'Knife / sharp weapon',
+    'robbery_motorbike' => 'Motorbike robbery',
+    'robbery_backpack' => 'Backpack robbery',
+    'robbery_phone' => 'Phone robbery',
+    'theft' || 'possible_theft' => 'Possible theft',
+    'person_presence' || 'known_identity' => 'Person detected',
+    _ => value.replaceAll('_', ' '),
+  };
+
+  Color _evidenceEventColor(String value) {
+    if (const {
+      'fighting',
+      'violence',
+      'fire_smoke',
+      'shooting',
+      'weapon_drawn',
+      'weapon_present',
+      'knife_threat',
+      'knife_present',
+    }.contains(value)) {
+      return AppColors.danger;
+    }
+    if (value == 'theft' ||
+        value == 'possible_theft' ||
+        value.startsWith('robbery')) {
+      return AppColors.warning;
+    }
+    return AppColors.teal;
+  }
+
+  IconData _evidenceObjectIcon(String value) => switch (value.toLowerCase()) {
+    'fire' || 'smoke' => Icons.local_fire_department,
+    'motorcycle' || 'motorbike' || 'scooter' => Icons.two_wheeler,
+    'bicycle' || 'bike' => Icons.pedal_bike,
+    'person' => Icons.person,
+    'knife' ||
+    'scissors' ||
+    'dagger' ||
+    'machete' => Icons.warning_amber_rounded,
+    'gun' || 'pistol' || 'rifle' || 'weapon' => Icons.dangerous,
+    'phone' || 'cell phone' => Icons.phone_android,
+    'backpack' || 'bag' || 'handbag' => Icons.backpack,
+    _ => Icons.label_outline,
+  };
+
+  String _evidenceObjectLabel(String value) => switch (value.toLowerCase()) {
+    'fire' => 'Fire',
+    'smoke' => 'Smoke',
+    'motorcycle' || 'motorbike' || 'scooter' => 'Motorbike',
+    'bicycle' || 'bike' => 'Bicycle',
+    'person' => 'Person',
+    'knife' || 'scissors' || 'dagger' || 'machete' => 'Knife',
+    'gun' || 'pistol' || 'rifle' || 'weapon' => 'Weapon',
+    'phone' || 'cell phone' => 'Phone',
+    'backpack' || 'bag' || 'handbag' => 'Backpack',
+    _ => value.replaceAll('_', ' '),
+  };
+
+  Widget _buildEvidenceBadges(QAEvidenceModel evidence) {
+    final confidence = evidence.confidence;
+    final confidenceColor = confidence == null
+        ? AppColors.textMuted
+        : confidence >= 0.80
+        ? AppColors.success
+        : confidence >= 0.50
+        ? AppColors.warning
+        : AppColors.danger;
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        if (evidence.eventType != null)
+          _EvidenceBadge(
+            icon: Icons.shield_outlined,
+            label: _evidenceEventLabel(evidence.eventType!),
+            color: _evidenceEventColor(evidence.eventType!),
+          ),
+        if (evidence.detectedLabel != null)
+          _EvidenceBadge(
+            icon: _evidenceObjectIcon(evidence.detectedLabel!),
+            label: _evidenceObjectLabel(evidence.detectedLabel!),
+            color: AppColors.teal,
+          ),
+        if (confidence != null)
+          _EvidenceBadge(
+            icon: Icons.verified,
+            label: 'Confidence ${(confidence * 100).toStringAsFixed(1)}%',
+            color: confidenceColor,
+          ),
+      ],
+    );
+  }
+
   Widget _buildEvidenceCard(QAEvidenceModel ev) {
     final hasImage = ev.snapshotPath.isNotEmpty;
     final sourceVideo = _videoForId(ev.sourceVideoId);
@@ -1596,7 +1696,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         onTap: () => _focusEvidence(ev),
         borderRadius: BorderRadius.circular(AppRadii.sm),
         child: Container(
-          width: 220,
+          width: 280,
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: AppColors.surfaceSubtle,
@@ -1690,38 +1790,11 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                 ),
               ],
-              if (ev.eventType != null || ev.confidence != null) ...[
+              if (ev.eventType != null ||
+                  ev.detectedLabel != null ||
+                  ev.confidence != null) ...[
                 const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    if (ev.eventType != null)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          ev.eventType!.replaceAll('_', ' '),
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ),
-                    if (ev.detectedLabel != null)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          ev.detectedLabel!.replaceAll('_', ' '),
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ),
-                    if (ev.confidence != null)
-                      Chip(
-                        visualDensity: VisualDensity.compact,
-                        label: Text(
-                          'Confidence ${(ev.confidence! * 100).toStringAsFixed(1)}%',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ),
-                  ],
-                ),
+                _buildEvidenceBadges(ev),
               ],
               const SizedBox(height: 6),
               Row(
@@ -1879,6 +1952,45 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       default:
         return 'HỎI ĐÁP AN NINH';
     }
+  }
+}
+
+class _EvidenceBadge extends StatelessWidget {
+  const _EvidenceBadge({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withAlpha(AppColors.darkMode ? 45 : 20),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withAlpha(110)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

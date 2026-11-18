@@ -329,6 +329,57 @@ class DetectionLogModel {
   final String detectedAt;
 }
 
+class SecurityEventModel {
+  const SecurityEventModel({
+    required this.id,
+    required this.sourceId,
+    required this.sourceType,
+    required this.sourceName,
+    required this.eventType,
+    required this.startTimestamp,
+    required this.endTimestamp,
+    required this.confidence,
+    required this.status,
+    required this.createdAt,
+    this.cameraName,
+    this.detectedLabel,
+    this.actorTrackIds = const [],
+  });
+
+  factory SecurityEventModel.fromJson(Map<String, dynamic> json) =>
+      SecurityEventModel(
+        id: json['id'] as int,
+        sourceId: json['source_id'] as String,
+        sourceType: json['source_type'] as String,
+        sourceName: json['source_name'] as String,
+        cameraName: json['camera_name'] as String?,
+        eventType: json['event_type'] as String,
+        startTimestamp: (json['start_timestamp'] as num).toDouble(),
+        endTimestamp: (json['end_timestamp'] as num).toDouble(),
+        confidence: (json['confidence'] as num).toDouble(),
+        detectedLabel: json['detected_label'] as String?,
+        actorTrackIds: (json['actor_track_ids'] as List<dynamic>? ?? const [])
+            .map((value) => (value as num).toInt())
+            .toList(),
+        status: json['status'] as String,
+        createdAt: json['created_at'] as String,
+      );
+
+  final int id;
+  final String sourceId;
+  final String sourceType;
+  final String sourceName;
+  final String? cameraName;
+  final String eventType;
+  final double startTimestamp;
+  final double endTimestamp;
+  final double confidence;
+  final String? detectedLabel;
+  final List<int> actorTrackIds;
+  final String status;
+  final String createdAt;
+}
+
 enum AlertCategory {
   unknownPerson,
   restrictedArea,

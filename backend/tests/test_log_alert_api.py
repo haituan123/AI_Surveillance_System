@@ -143,6 +143,41 @@ class LogAlertApiTestCase(unittest.TestCase):
         self.assertEqual(latest.status_code, 200)
         self.assertEqual(latest.json()["status"], "unknown")
 
+    def test_security_events_are_exposed_with_video_and_evidence_metadata(self):
+        conversation = self.connection.execute(
+            "INSERT INTO qa_conversations (title) VALUES (?)",
+            ("Incident review",),
+        )
+        self.connection.execute(
+            """
+            INSERT INTO qa_uploaded_videos (
+                conversation_id, video_id, filename, file_path, status
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (conversation.lastrowid, "qa-fight", "fight.mp4", "fight.mp4", "completed"),
+        )
+        self.connection.execute(
+            """
+            INSERT INTO security_events (
+                session_or_video_id, event_type, start_timestamp,
+                end_timestamp, confidence, actor_track_ids_json,
+                object_labels_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("qa-fight", "fighting", 2.5, 4.0, 0.87, "[3, 8]", '["person"]'),
+        )
+        self.connection.commit()
+
+        response = self.client.get("/logs/security-events?event_type=fighting")
+
+        self.assertEqual(response.status_code, 200)
+        event = response.json()[0]
+        self.assertEqual(event["source_type"], "qa_video")
+        self.assertEqual(event["source_name"], "fight.mp4")
+        self.assertEqual(event["detected_label"], "person")
+        self.assertEqual(event["actor_track_ids"], [3, 8])
+        self.assertAlmostEqual(event["confidence"], 0.87)
+
     def test_alert_listing_detail_latest_and_read_update(self):
         alerts = self.client.get("/alerts?is_read=false")
         latest = self.client.get("/alerts/latest")

@@ -22,6 +22,28 @@ class ActionVerifierTestCase(unittest.TestCase):
         self.assertEqual(result.action_type, "normal")
         self.assertFalse(result.is_suspicious)
 
+    def test_single_frame_does_not_confirm_a_fight(self):
+        frame = np.full((100, 100, 3), 128, dtype=np.uint8)
+
+        result = self.verifier.verify_clip(
+            [frame],
+            suspected_action=ThreatType.FIGHTING,
+        )
+
+        self.assertFalse(result.is_suspicious)
+        self.assertEqual(result.confidence, 0.0)
+
+    def test_transient_motion_is_not_lost_when_last_frame_matches_first(self):
+        dark = np.zeros((80, 80, 3), dtype=np.uint8)
+        bright = np.full((80, 80, 3), 180, dtype=np.uint8)
+
+        result = self.verifier.verify_clip(
+            [dark, bright, dark.copy()],
+            suspected_action=ThreatType.FIGHTING,
+        )
+
+        self.assertTrue(result.is_suspicious)
+
     def test_suspected_fighting_with_motion(self):
         # Frame 0: dark, Frame 4: bright (simulating sudden rapid movement/motion)
         frames = [

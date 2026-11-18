@@ -37,7 +37,7 @@ extension SecurityRecordFilterDetails on SecurityRecordFilter {
     SecurityRecordFilter.unknownPerson => 'Unknown person',
     SecurityRecordFilter.fighting => 'Fighting',
     SecurityRecordFilter.fireSmoke => 'Fire / smoke',
-    SecurityRecordFilter.shooting => 'Shooting',
+    SecurityRecordFilter.shooting => 'Weapon / shooting',
     SecurityRecordFilter.robberyTheft => 'Robbery / theft',
   };
 
@@ -88,8 +88,12 @@ extension SecurityRecordFilterDetails on SecurityRecordFilter {
       SecurityRecordFilter.shooting =>
         type == 'shooting' ||
             type == 'weapon_drawn' ||
+            type == 'weapon_present' ||
+            type == 'knife_threat' ||
+            type == 'knife_present' ||
             message.contains('shoot') ||
             message.contains('gun') ||
+            message.contains('knife') ||
             message.contains('firearm') ||
             message.contains('bắn súng'),
       SecurityRecordFilter.robberyTheft =>
@@ -102,6 +106,35 @@ extension SecurityRecordFilterDetails on SecurityRecordFilter {
             message.contains('trộm'),
     };
   }
+
+  bool matchesEvent(SecurityEventModel event) {
+    final type = event.eventType.toLowerCase();
+    final label = event.detectedLabel?.toLowerCase() ?? '';
+    return switch (this) {
+      SecurityRecordFilter.knownPerson ||
+      SecurityRecordFilter.unknownPerson => false,
+      SecurityRecordFilter.fighting => type == 'fighting' || type == 'violence',
+      SecurityRecordFilter.fireSmoke =>
+        type == 'fire_smoke' || label == 'fire' || label == 'smoke',
+      SecurityRecordFilter.shooting =>
+        type == 'shooting' ||
+            type == 'weapon_drawn' ||
+            type == 'weapon_present' ||
+            type == 'knife_threat' ||
+            type == 'knife_present' ||
+            const {
+              'gun',
+              'pistol',
+              'rifle',
+              'knife',
+              'scissors',
+            }.contains(label),
+      SecurityRecordFilter.robberyTheft =>
+        type == 'theft' ||
+            type == 'possible_theft' ||
+            type.startsWith('robbery'),
+    };
+  }
 }
 
 class _LogsScreenState extends State<LogsScreen> {
@@ -109,6 +142,7 @@ class _LogsScreenState extends State<LogsScreen> {
   Timer? _refreshTimer;
   List<DetectionLogModel> _logs = const [];
   List<AlertModel> _alerts = const [];
+  List<SecurityEventModel> _events = const [];
   Set<int> _selectedLogIds = const {};
   Set<int> _selectedAlertIds = const {};
   Set<SecurityRecordFilter> _activeFilters = const {};
@@ -149,6 +183,15 @@ class _LogsScreenState extends State<LogsScreen> {
     }).toList();
   }
 
+  List<SecurityEventModel> get _visibleEvents {
+    if (_activeFilters.isEmpty) return _events;
+    return _events
+        .where(
+          (event) => _activeFilters.any((filter) => filter.matchesEvent(event)),
+        )
+        .toList();
+  }
+
   void _toggleFilter(SecurityRecordFilter filter) {
     setState(() {
       final next = {..._activeFilters};
@@ -186,11 +229,13 @@ class _LogsScreenState extends State<LogsScreen> {
       final values = await Future.wait([
         _service.listLogs(),
         _service.listAlerts(),
+        _service.listSecurityEvents(),
       ]);
       if (!mounted) return;
       setState(() {
         _logs = values[0] as List<DetectionLogModel>;
         _alerts = values[1] as List<AlertModel>;
+        _events = values[2] as List<SecurityEventModel>;
         _refreshFailures = 0;
         _error = null;
         _selectedLogIds = _selectedLogIds
@@ -434,16 +479,17 @@ class _LogsScreenState extends State<LogsScreen> {
     final unknownLabels = _UnknownPersonLabels(logs: _logs, alerts: _alerts);
     final visibleLogs = _visibleLogs;
     final visibleAlerts = _visibleAlerts;
+    final visibleEvents = _visibleEvents;
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: AppPage(
         maxWidth: AppLayout.dataMaxWidth,
         children: [
           HeaderBlock(
             title: 'Persistent Logs & Alerts',
             subtitle:
-                'Only live-webcam events are saved. Uploaded-video events never appear here.',
+                'Review live detections, alerts, and indexed security events in one place.',
             icon: Icons.receipt_long,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -466,6 +512,10 @@ class _LogsScreenState extends State<LogsScreen> {
                         icon: Icon(Icons.notifications_outlined),
                         text: 'Alerts (${visibleAlerts.length})',
                       ),
+                      Tab(
+                        icon: Icon(Icons.shield_outlined),
+                        text: 'Security events (${visibleEvents.length})',
+                      ),
                     ],
                   ),
                   if (_loading) const LinearProgressIndicator(),
@@ -476,6 +526,8 @@ class _LogsScreenState extends State<LogsScreen> {
                     totalLogCount: _logs.length,
                     visibleAlertCount: visibleAlerts.length,
                     totalAlertCount: _alerts.length,
+                    visibleEventCount: visibleEvents.length,
+                    totalEventCount: _events.length,
                     onToggle: _toggleFilter,
                     onClear: () => setState(() => _activeFilters = const {}),
                   ),
@@ -526,6 +578,11 @@ class _LogsScreenState extends State<LogsScreen> {
                           onToggleRead: _toggleRead,
                           onDeleteAll: _deleteAllAlerts,
                         ),
+                        _SecurityEventsTab(
+                          events: visibleEvents,
+                          filtered: _activeFilters.isNotEmpty,
+                          loading: _loading,
+                        ),
                       ],
                     ),
                   ),
@@ -546,6 +603,8 @@ class _SecurityFilterBar extends StatelessWidget {
     required this.totalLogCount,
     required this.visibleAlertCount,
     required this.totalAlertCount,
+    required this.visibleEventCount,
+    required this.totalEventCount,
     required this.onToggle,
     required this.onClear,
   });
@@ -555,6 +614,8 @@ class _SecurityFilterBar extends StatelessWidget {
   final int totalLogCount;
   final int visibleAlertCount;
   final int totalAlertCount;
+  final int visibleEventCount;
+  final int totalEventCount;
   final ValueChanged<SecurityRecordFilter> onToggle;
   final VoidCallback onClear;
 
@@ -593,7 +654,8 @@ class _SecurityFilterBar extends StatelessWidget {
                 );
                 final summary = Text(
                   '$visibleLogCount/$totalLogCount logs • '
-                  '$visibleAlertCount/$totalAlertCount alerts',
+                  '$visibleAlertCount/$totalAlertCount alerts • '
+                  '$visibleEventCount/$totalEventCount events',
                   style: TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 11,
@@ -935,6 +997,117 @@ class _AlertsTab extends StatelessWidget {
                 ),
         ),
       ],
+    );
+  }
+}
+
+class _SecurityEventsTab extends StatelessWidget {
+  const _SecurityEventsTab({
+    required this.events,
+    required this.filtered,
+    required this.loading,
+  });
+
+  final List<SecurityEventModel> events;
+  final bool filtered;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading && events.isEmpty) {
+      return const _LoadingRows(label: 'Loading security events');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _TabActionRow(
+          title: 'Indexed security events',
+          action: SizedBox.shrink(),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Expanded(
+          child: events.isEmpty
+              ? EmptyPanel(
+                  icon: Icons.shield_outlined,
+                  title: filtered
+                      ? 'No matching security events'
+                      : 'No indexed security events',
+                  message: filtered
+                      ? 'Try selecting a different security filter.'
+                      : 'Analyze a Q&A video to create security events.',
+                )
+              : ListView.builder(
+                  itemCount: events.length,
+                  itemBuilder: (context, index) =>
+                      _SecurityEventRow(event: events[index]),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SecurityEventRow extends StatelessWidget {
+  const _SecurityEventRow({required this.event});
+
+  final SecurityEventModel event;
+
+  bool get _danger => const {
+    'fighting',
+    'violence',
+    'fire_smoke',
+    'shooting',
+    'weapon_drawn',
+    'weapon_present',
+    'knife_threat',
+    'knife_present',
+  }.contains(event.eventType);
+
+  IconData get _icon => switch (event.eventType) {
+    'fire_smoke' => Icons.local_fire_department,
+    'fighting' || 'violence' => Icons.sports_mma,
+    'shooting' || 'weapon_drawn' || 'weapon_present' => Icons.gps_fixed,
+    'knife_threat' || 'knife_present' => Icons.warning_amber_rounded,
+    'robbery_motorbike' => Icons.two_wheeler,
+    'robbery_backpack' ||
+    'robbery_phone' ||
+    'theft' ||
+    'possible_theft' => Icons.front_hand_outlined,
+    _ => Icons.shield_outlined,
+  };
+
+  String get _title => event.eventType
+      .split('_')
+      .map(
+        (word) => word.isEmpty
+            ? word
+            : '${word[0].toUpperCase()}${word.substring(1)}',
+      )
+      .join(' ');
+
+  String _formatPosition(double seconds) {
+    final minutes = seconds ~/ 60;
+    final remainder = (seconds % 60).floor();
+    return '${minutes.toString().padLeft(2, '0')}:${remainder.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final confidence = '${(event.confidence * 100).toStringAsFixed(1)}%';
+    final range = event.startTimestamp == event.endTimestamp
+        ? _formatPosition(event.startTimestamp)
+        : '${_formatPosition(event.startTimestamp)}–${_formatPosition(event.endTimestamp)}';
+    final object = event.detectedLabel == null
+        ? ''
+        : ' • ${event.detectedLabel}';
+    return _SelectableRecordCard(
+      selected: false,
+      severe: _danger,
+      icon: Icon(_icon, color: _danger ? AppColors.danger : AppColors.warning),
+      title: '$_title • Confidence $confidence',
+      subtitle: '${event.sourceName}$object • $range',
+      timestamp: formatBackendTimestamp(event.createdAt),
+      onTap: null,
     );
   }
 }

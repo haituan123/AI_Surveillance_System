@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.app.database import db_session
 from backend.app.models import DetectionStatus
-from backend.app.schemas import DetectionLogView
+from backend.app.schemas import DetectionLogView, SecurityEventView
 from backend.app.schemas import DeleteLogResponse
 from backend.app.schemas import DeleteLogsResponse
 from backend.services.log_service import LogService
@@ -40,6 +40,15 @@ def get_latest_log(service: LogService = Depends(get_log_service)):
     if log is None:
         raise HTTPException(status_code=404, detail="No detection logs found")
     return log
+
+
+@router.get("/security-events", response_model=list[SecurityEventView])
+def list_security_events(
+    event_type: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    service: LogService = Depends(get_log_service),
+):
+    return service.list_security_events(event_type=event_type, limit=limit)
 
 
 @router.delete("/all", response_model=DeleteLogsResponse)

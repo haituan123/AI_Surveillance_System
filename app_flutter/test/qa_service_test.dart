@@ -55,10 +55,12 @@ void main() {
         question: 'Ai xuất hiện?',
         conversationId: 7,
         sessionOrVideoIds: const ['video-1', 'video-2'],
+        responseLanguage: 'en',
       );
 
       final body = jsonDecode(capturedRequest.body) as Map<String, dynamic>;
       expect(body['session_or_video_ids'], ['video-1', 'video-2']);
+      expect(body['response_language'], 'en');
       expect(answer.evidences.single.sourceVideoId, 'video-2');
       expect(
         service.videoContentUrl('video-2'),

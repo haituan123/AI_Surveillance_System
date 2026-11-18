@@ -96,6 +96,7 @@ class QAService {
     int? cameraId,
     String? sessionOrVideoId,
     List<String>? sessionOrVideoIds,
+    String responseLanguage = 'vi',
   }) async {
     late final http.Response response;
     try {
@@ -108,6 +109,7 @@ class QAService {
           'camera_id': cameraId,
           'session_or_video_id': sessionOrVideoId,
           'session_or_video_ids': sessionOrVideoIds,
+          'response_language': responseLanguage,
         }),
         // The backend can try both the primary and fallback Gemini models.
         // Keep this above their combined 2 x 60-second default budget.

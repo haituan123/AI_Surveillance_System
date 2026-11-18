@@ -218,29 +218,32 @@ class ActionVerifier:
         if len(frames) < 2:
             return ActionResult(
                 action_type=suspected_action or "normal",
-                confidence=0.70,
-                is_suspicious=bool(suspected_action and suspected_action != "normal"),
-                description_en=f"Static frame assessment for {suspected_action or 'scene'}",
+                confidence=0.0,
+                is_suspicious=False,
+                description_en="Waiting for temporal evidence",
                 bounding_box=interaction_box,
             )
 
-        # Measure motion magnitude between first and last frames in the window
-        gray1 = cv2.cvtColor(frames[0], cv2.COLOR_BGR2GRAY)
-        gray2 = cv2.cvtColor(frames[-1], cv2.COLOR_BGR2GRAY)
+        gray_frames = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in frames]
 
         if interaction_box:
-            h, w = gray1.shape
+            h, w = gray_frames[0].shape
             x1 = max(0, min(w - 1, interaction_box.x1))
             y1 = max(0, min(h - 1, interaction_box.y1))
             x2 = max(x1 + 1, min(w, interaction_box.x2))
             y2 = max(y1 + 1, min(h, interaction_box.y2))
-            crop1 = gray1[y1:y2, x1:x2]
-            crop2 = gray2[y1:y2, x1:x2]
-            if crop1.size > 0 and crop2.size > 0 and crop1.shape == crop2.shape:
-                gray1, gray2 = crop1, crop2
+            crops = [frame[y1:y2, x1:x2] for frame in gray_frames]
+            if all(crop.size > 0 and crop.shape == crops[0].shape for crop in crops):
+                gray_frames = crops
 
-        diff = cv2.absdiff(gray1, gray2)
-        motion_score = float(np.mean(diff))
+        # Consecutive-frame energy catches short punches/kicks that a simple
+        # first-vs-last comparison misses when the subjects return to position.
+        motion_samples = [
+            float(np.mean(cv2.absdiff(previous, current)))
+            for previous, current in zip(gray_frames, gray_frames[1:])
+        ]
+        end_to_end = float(np.mean(cv2.absdiff(gray_frames[0], gray_frames[-1])))
+        motion_score = max(end_to_end, sum(motion_samples) / len(motion_samples))
 
         # Dynamic confidence based on movement intensity
         normalized_conf = min(0.98, max(0.70, 0.65 + (motion_score / 100.0) * 0.35))

@@ -205,6 +205,22 @@ class DetectionLogView(DetectionLog):
     camera_name: str
 
 
+class SecurityEventView(BaseModel):
+    id: int
+    source_id: str
+    source_type: str
+    source_name: str
+    camera_name: str | None = None
+    event_type: str
+    start_timestamp: float
+    end_timestamp: float
+    confidence: float
+    detected_label: str | None = None
+    actor_track_ids: list[int] = Field(default_factory=list)
+    status: str
+    created_at: str
+
+
 class DeleteLogResponse(BaseModel):
     message: str
     deleted_log_id: int
@@ -301,6 +317,8 @@ class QAAskRequest(BaseModel):
     conversation_id: int | None = None
     camera_id: int | None = None
     session_or_video_id: str | None = None
+    session_or_video_ids: list[str] | None = Field(default=None, max_length=20)
+    response_language: str = Field(default="vi", pattern="^(vi|en)$")
 
 
 class QAEvidence(BaseModel):
@@ -315,6 +333,7 @@ class QAEvidence(BaseModel):
     event_type: str | None = None
     detected_label: str | None = None
     confidence: float | None = None
+    source_video_id: str | None = None
 
 
 class QAMessage(BaseModel):

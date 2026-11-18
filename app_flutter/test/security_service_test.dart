@@ -271,6 +271,31 @@ void main() {
     expect(alerts.single.detectionLogId, 11);
   });
 
+  test('parses indexed security events for the unified logs view', () async {
+    final client = MockClient(
+      (request) async => http.Response(
+        '[{"id":21,"source_id":"qa-fight","source_type":"qa_video",'
+        '"source_name":"fight.mp4","camera_name":null,'
+        '"event_type":"fighting","start_timestamp":2.5,'
+        '"end_timestamp":4.0,"confidence":0.87,'
+        '"detected_label":"person","actor_track_ids":[3,8],'
+        '"status":"open","created_at":"2026-11-18T08:00:00Z"}]',
+        200,
+      ),
+    );
+    final service = SecurityService(
+      client: client,
+      baseUrl: 'http://backend.test',
+    );
+
+    final events = await service.listSecurityEvents();
+
+    expect(events.single.sourceName, 'fight.mp4');
+    expect(events.single.eventType, 'fighting');
+    expect(events.single.actorTrackIds, [3, 8]);
+    expect(events.single.confidence, 0.87);
+  });
+
   test('delete helpers call persistent delete endpoints', () async {
     final requestedPaths = <String>[];
     final client = MockClient((request) async {

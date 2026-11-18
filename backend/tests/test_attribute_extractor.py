@@ -76,6 +76,18 @@ class ThreatDetectorTestCase(unittest.TestCase):
         self.assertIn(ThreatType.KNIFE_THREAT, threat_types)
         self.assertIn(ThreatType.THEFT, threat_types)
 
+    def test_low_confidence_weapon_proposal_is_retained(self):
+        detector = ThreatAndObjectDetector()
+        raw_dets = [
+            {"label": "knife", "confidence": 0.18, "x1": 5, "y1": 5, "x2": 20, "y2": 25},
+            {"label": "backpack", "confidence": 0.18, "x1": 30, "y1": 5, "x2": 50, "y2": 25},
+        ]
+
+        objects, threats = detector.evaluate_detections(raw_dets)
+
+        self.assertEqual([item.label for item in objects], ["knife"])
+        self.assertEqual(threats[0].threat_type, ThreatType.KNIFE_THREAT)
+
     def test_visual_flame_detection_fallback(self):
         detector = ThreatAndObjectDetector()
         # Synthetic flame frame: dark background with a bright orange/red flame spot

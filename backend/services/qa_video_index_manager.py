@@ -1,6 +1,7 @@
 """Process-wide lifecycle for persistent Video Q&A indexing workers."""
 
 import logging
+import math
 import sqlite3
 import threading
 import time
@@ -11,7 +12,11 @@ from pathlib import Path
 
 import cv2
 
-from backend.app.config import QA_SNAPSHOTS_DIR, QA_VIDEO_INDEX_STOP_TIMEOUT_SECONDS
+from backend.app.config import (
+    QA_SNAPSHOTS_DIR,
+    QA_VIDEO_INDEX_STOP_TIMEOUT_SECONDS,
+    VIDEO_QA_ANALYSIS_FPS,
+)
 from backend.app.database import get_connection
 from backend.app.models import QAUploadedVideoStatus
 from backend.services.frame_indexer_service import FrameIndexerService
@@ -19,6 +24,24 @@ from backend.services.gallery_service import build_analysis_runtime
 from backend.services.qa_snapshot_storage import qa_video_snapshot_dir
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_SOURCE_VIDEO_FPS = 25.0
+
+
+def calculate_sampling(input_fps: float, requested_fps: float) -> tuple[float, int, float]:
+    """Return safe source FPS, sampling interval, and effective analysis FPS."""
+    safe_input = (
+        input_fps
+        if math.isfinite(input_fps) and input_fps > 0
+        else DEFAULT_SOURCE_VIDEO_FPS
+    )
+    safe_requested = (
+        requested_fps
+        if math.isfinite(requested_fps) and requested_fps > 0
+        else 8.0
+    )
+    interval = max(1, round(safe_input / safe_requested))
+    return safe_input, interval, safe_input / interval
 
 
 class QAVideoIndexStopTimeoutError(RuntimeError):
@@ -162,13 +185,19 @@ class QAVideoIndexManager:
                 return
             if not capture.isOpened():
                 raise RuntimeError("Could not open Q&A uploaded video")
-            input_fps = float(capture.get(cv2.CAP_PROP_FPS) or 25.0)
+            input_fps, sample_interval, analysis_fps = calculate_sampling(
+                float(capture.get(cv2.CAP_PROP_FPS) or 0.0),
+                VIDEO_QA_ANALYSIS_FPS,
+            )
             total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-            if total_frames > 0:
-                self._update(connection, job, "total_frames = ?", (total_frames,))
+            self._update(
+                connection,
+                job,
+                "source_fps = ?, analysis_fps = ?, total_frames = ?",
+                (input_fps, analysis_fps, total_frames or None),
+            )
             if cancelled():
                 return
-            sample_interval = max(1, int(input_fps))
             indexer = self.indexer_factory(
                 connection,
                 snapshots_dir=qa_video_snapshot_dir(job.video_id, qa_root=self.qa_snapshots_dir),
@@ -208,12 +237,15 @@ class QAVideoIndexManager:
                     raw_detections = []
                     if person_tracker is not None and hasattr(person_tracker, "detect_objects"):
                         try:
-                            raw_detections = person_tracker.detect_objects(frame, confidence=0.25)
+                            # Weapons are often small in CCTV footage. Keep a low
+                            # proposal threshold; ThreatAndObjectDetector applies
+                            # the final class-specific thresholds.
+                            raw_detections = person_tracker.detect_objects(frame, confidence=0.15)
                         except Exception:
                             pass
                     elif yolo_model is not None:
                         try:
-                            yolo_res = yolo_model(frame, conf=0.25, verbose=False)
+                            yolo_res = yolo_model(frame, conf=0.15, verbose=False)
                             if yolo_res and len(yolo_res) > 0 and yolo_res[0].boxes is not None:
                                 for box in yolo_res[0].boxes:
                                     cls_id = int(box.cls.item())
@@ -242,6 +274,13 @@ class QAVideoIndexManager:
                         raw_object_detections=raw_detections,
                     )
                     indexed_count += 1
+                    if indexed_count % 10 == 0:
+                        self._update(
+                            connection,
+                            job,
+                            "processed_frames = ?, indexed_frames = ?",
+                            (frame_index + 1, indexed_count),
+                        )
                 frame_index += 1
                 if cancelled():
                     return
@@ -253,8 +292,13 @@ class QAVideoIndexManager:
                 indexer.flush(job.video_id)
             self._update(
                 connection, job,
-                "status = ?, processed_frames = ?, completed_at = ?",
-                (QAUploadedVideoStatus.COMPLETED, frame_index, datetime.now(timezone.utc).isoformat()),
+                "status = ?, processed_frames = ?, indexed_frames = ?, completed_at = ?",
+                (
+                    QAUploadedVideoStatus.COMPLETED,
+                    frame_index,
+                    indexed_count,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
             )
             logger.info("Q&A indexing finished: %s (%d indexed)", job.video_id, indexed_count)
         except Exception as exc:

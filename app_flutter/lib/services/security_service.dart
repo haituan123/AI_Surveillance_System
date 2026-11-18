@@ -236,6 +236,18 @@ class SecurityService {
     _ensureSuccess(response);
   }
 
+  Future<List<SecurityEventModel>> listSecurityEvents({int limit = 200}) async {
+    final response = await _get(
+      _uri('/logs/security-events', {'limit': limit.toString()}),
+    );
+    _ensureSuccess(response);
+    return _jsonList(response)
+        .map(
+          (item) => SecurityEventModel.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
   Future<List<AlertModel>> listAlerts({int limit = 100}) async {
     final response = await _get(_uri('/alerts', {'limit': limit.toString()}));
     _ensureSuccess(response);

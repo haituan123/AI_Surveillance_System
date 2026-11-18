@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 from backend.app.models import DetectionStatus
@@ -58,6 +59,55 @@ class LogService:
     def latest_log(self) -> dict | None:
         logs = self.list_logs(limit=1)
         return logs[0] if logs else None
+
+    def list_security_events(
+        self,
+        *,
+        event_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        conditions = []
+        parameters: list[object] = []
+        if event_type:
+            conditions.append("se.event_type = ?")
+            parameters.append(event_type)
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        parameters.append(limit)
+        rows = self.connection.execute(
+            f"""
+            SELECT se.id, se.session_or_video_id AS source_id,
+                   CASE WHEN qv.id IS NOT NULL THEN 'qa_video' ELSE 'camera' END
+                       AS source_type,
+                   COALESCE(qv.filename, c.name, se.session_or_video_id) AS source_name,
+                   c.name AS camera_name, se.event_type,
+                   se.start_timestamp, se.end_timestamp, se.confidence,
+                   se.object_labels_json, se.actor_track_ids_json,
+                   se.status, se.created_at
+            FROM security_events se
+            LEFT JOIN qa_uploaded_videos qv
+                ON qv.video_id = se.session_or_video_id
+            LEFT JOIN cameras c ON c.id = se.camera_id
+            {where}
+            ORDER BY se.created_at DESC, se.id DESC
+            LIMIT ?
+            """,
+            parameters,
+        ).fetchall()
+        events = []
+        for row in rows:
+            item = dict(row)
+            try:
+                labels = json.loads(item.pop("object_labels_json") or "[]")
+            except (TypeError, json.JSONDecodeError):
+                labels = []
+            try:
+                track_ids = json.loads(item.pop("actor_track_ids_json") or "[]")
+            except (TypeError, json.JSONDecodeError):
+                track_ids = []
+            item["detected_label"] = labels[0] if labels else None
+            item["actor_track_ids"] = [int(value) for value in track_ids]
+            events.append(item)
+        return events
 
     def delete_log(self, log_id: int) -> dict | None:
         row = self.connection.execute(
