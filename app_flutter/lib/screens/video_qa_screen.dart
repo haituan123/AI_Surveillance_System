@@ -43,14 +43,6 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
   // Selected Scope Filter: 'all' or one uploaded videoId.
   String _selectedScope = 'all';
 
-  final List<String> _quickPrompts = [
-    'Trong video có ai lấy chiếc balo trên bàn không?',
-    'Có ai cầm dao hoặc hành vi nguy hiểm không?',
-    'Người mặc áo đen hoặc áo đỏ xuất hiện lúc mấy giờ?',
-    'Có bao nhiêu người xuất hiện trong khung hình?',
-    'Có ai để quên đồ vật nào không?',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -389,8 +381,11 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop =
-        MediaQuery.sizeOf(context).width >= AppBreakpoints.compact;
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final isDesktop = viewportWidth >= AppBreakpoints.compact;
+    final historySidebarWidth = (viewportWidth * 0.22)
+        .clamp(280.0, 340.0)
+        .toDouble();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -399,7 +394,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
           // Sidebar lịch sử (nếu là màn hình lớn)
           if (isDesktop && _showHistory)
             Container(
-              width: 230,
+              key: const ValueKey('conversation-history-sidebar'),
+              width: historySidebarWidth,
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 border: Border(right: BorderSide(color: AppColors.border)),
@@ -651,40 +647,6 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                 tooltip: context.tr('Quản lý video'),
               ),
             ],
-          ),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                Text(
-                  'Gợi ý',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ..._quickPrompts.map((prompt) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ActionChip(
-                      avatar: Icon(
-                        Icons.auto_awesome,
-                        size: 13,
-                        color: AppColors.teal,
-                      ),
-                      label: Text(prompt, style: const TextStyle(fontSize: 11)),
-                      visualDensity: VisualDensity.compact,
-                      backgroundColor: AppColors.surfaceSubtle,
-                      side: BorderSide(color: AppColors.border),
-                      onPressed: () => _handleSend(prompt),
-                    ),
-                  );
-                }),
-              ],
-            ),
           ),
         ],
       ),
@@ -1176,9 +1138,13 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Lịch sử phiên hỏi đáp',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              Expanded(
+                child: Text(
+                  'Lịch sử phiên hỏi đáp',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
               ),
               IconButton(
                 icon: Icon(Icons.refresh, size: 18),
@@ -1208,6 +1174,13 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                           : Colors.transparent,
                       child: ListTile(
                         dense: true,
+                        contentPadding: const EdgeInsets.only(
+                          left: 16,
+                          right: 8,
+                        ),
+                        minLeadingWidth: 24,
+                        horizontalTitleGap: 10,
+                        minVerticalPadding: 10,
                         leading: Icon(
                           Icons.chat_bubble_outline,
                           size: 18,
@@ -1217,7 +1190,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                         ),
                         title: Text(
                           conv.title,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 13,
@@ -1237,6 +1210,11 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                           ),
                         ),
                         trailing: IconButton(
+                          constraints: const BoxConstraints.tightFor(
+                            width: 36,
+                            height: 36,
+                          ),
+                          padding: EdgeInsets.zero,
                           icon: Icon(
                             Icons.delete_outline,
                             size: 16,

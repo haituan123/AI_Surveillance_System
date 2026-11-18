@@ -38,6 +38,7 @@ void main() {
       await _tapDestination(tester, Icons.receipt_long_outlined);
       expect(tester.takeException(), isNull, reason: 'logs overflow');
       expect(find.text('Persistent Logs & Alerts'), findsOneWidget);
+      expect(find.text('Security filters'), findsOneWidget);
     });
   }
 
@@ -110,6 +111,60 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('expand-video-rail')));
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.getSize(videoRail).width, 360);
+  });
+
+  testWidgets('conversation history opens at a readable desktop width', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'app_language': 'en'});
+    await _setViewport(tester, const Size(1440, 900));
+    await tester.pumpWidget(const FaceSecurityApp());
+    await tester.pump();
+
+    await _tapDestination(tester, Icons.psychology_outlined);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byIcon(Icons.history_rounded));
+    await tester.pump();
+
+    final historySidebar = find.byKey(
+      const ValueKey('conversation-history-sidebar'),
+    );
+    expect(historySidebar, findsOneWidget);
+    expect(tester.getSize(historySidebar).width, inInclusiveRange(280, 340));
+    expect(find.text('Conversation history'), findsOneWidget);
+  });
+
+  testWidgets('video QA empty state is fully translated to English', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'app_language': 'en'});
+    await _setViewport(tester, const Size(1440, 900));
+    await tester.pumpWidget(const FaceSecurityApp());
+    await tester.pump();
+
+    await _tapDestination(tester, Icons.psychology_outlined);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Surveillance Video Q&A'), findsOneWidget);
+    expect(
+      find.text(
+        'Choose a video, ask questions, and review timestamped evidence',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Add video'), findsWidgets);
+    expect(find.text('No videos yet'), findsWidgets);
+    expect(find.text('Suggestions'), findsNothing);
+    expect(
+      find.text('Did anyone take the backpack from the table?'),
+      findsNothing,
+    );
+    expect(find.text('Scope: No videos yet'), findsOneWidget);
+
+    expect(find.text('Hỏi đáp video giám sát'), findsNothing);
+    expect(find.text('Thêm video'), findsNothing);
+    expect(find.text('Chưa có video'), findsNothing);
+    expect(find.text('Gợi ý'), findsNothing);
   });
 }
 

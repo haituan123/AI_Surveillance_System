@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' hide Text;
 
+import '../core/app_localization.dart';
 import '../core/timestamp_formatter.dart';
 import '../models/security_models.dart';
 import '../services/security_service.dart';
@@ -21,6 +22,88 @@ class LogsScreen extends StatefulWidget {
   State<LogsScreen> createState() => _LogsScreenState();
 }
 
+enum SecurityRecordFilter {
+  knownPerson,
+  unknownPerson,
+  fighting,
+  fireSmoke,
+  shooting,
+  robberyTheft,
+}
+
+extension SecurityRecordFilterDetails on SecurityRecordFilter {
+  String get label => switch (this) {
+    SecurityRecordFilter.knownPerson => 'Known person',
+    SecurityRecordFilter.unknownPerson => 'Unknown person',
+    SecurityRecordFilter.fighting => 'Fighting',
+    SecurityRecordFilter.fireSmoke => 'Fire / smoke',
+    SecurityRecordFilter.shooting => 'Shooting',
+    SecurityRecordFilter.robberyTheft => 'Robbery / theft',
+  };
+
+  IconData get icon => switch (this) {
+    SecurityRecordFilter.knownPerson => Icons.verified_user_outlined,
+    SecurityRecordFilter.unknownPerson => Icons.person_search_outlined,
+    SecurityRecordFilter.fighting => Icons.sports_mma_outlined,
+    SecurityRecordFilter.fireSmoke => Icons.local_fire_department_outlined,
+    SecurityRecordFilter.shooting => Icons.gps_fixed,
+    SecurityRecordFilter.robberyTheft => Icons.front_hand_outlined,
+  };
+
+  bool matchesLog(
+    DetectionLogModel log, {
+    Iterable<AlertModel> linkedAlerts = const [],
+  }) {
+    return switch (this) {
+      SecurityRecordFilter.knownPerson => log.status == 'known',
+      SecurityRecordFilter.unknownPerson => log.status != 'known',
+      _ => linkedAlerts.any(matchesAlert),
+    };
+  }
+
+  bool matchesAlert(AlertModel alert, {DetectionLogModel? linkedLog}) {
+    final type = alert.alertType.toLowerCase();
+    final message = alert.message.toLowerCase();
+    return switch (this) {
+      SecurityRecordFilter.knownPerson => linkedLog?.status == 'known',
+      SecurityRecordFilter.unknownPerson =>
+        (linkedLog != null && linkedLog.status != 'known') ||
+            type == 'unknown_person' ||
+            type == 'restricted_area' ||
+            type == 'loitering' ||
+            message.contains('unknown person'),
+      SecurityRecordFilter.fighting =>
+        type == 'violence' ||
+            type == 'fighting' ||
+            message.contains('fight') ||
+            message.contains('violence') ||
+            message.contains('đánh nhau'),
+      SecurityRecordFilter.fireSmoke =>
+        type == 'fire_smoke' ||
+            message.contains('fire') ||
+            message.contains('smoke') ||
+            message.contains('explosion') ||
+            message.contains('cháy') ||
+            message.contains('nổ'),
+      SecurityRecordFilter.shooting =>
+        type == 'shooting' ||
+            type == 'weapon_drawn' ||
+            message.contains('shoot') ||
+            message.contains('gun') ||
+            message.contains('firearm') ||
+            message.contains('bắn súng'),
+      SecurityRecordFilter.robberyTheft =>
+        type == 'theft' ||
+            type.startsWith('robbery') ||
+            message.contains('robbery') ||
+            message.contains('theft') ||
+            message.contains('stolen') ||
+            message.contains('cướp') ||
+            message.contains('trộm'),
+    };
+  }
+}
+
 class _LogsScreenState extends State<LogsScreen> {
   late final SecurityService _service = widget.service ?? SecurityService();
   Timer? _refreshTimer;
@@ -28,6 +111,7 @@ class _LogsScreenState extends State<LogsScreen> {
   List<AlertModel> _alerts = const [];
   Set<int> _selectedLogIds = const {};
   Set<int> _selectedAlertIds = const {};
+  Set<SecurityRecordFilter> _activeFilters = const {};
   bool _loading = true;
   bool _deletingLogs = false;
   bool _deletingAlerts = false;
@@ -36,6 +120,42 @@ class _LogsScreenState extends State<LogsScreen> {
   String? _error;
 
   bool get _busy => _loading || _deletingLogs || _deletingAlerts;
+
+  List<DetectionLogModel> get _visibleLogs {
+    if (_activeFilters.isEmpty) return _logs;
+    return _logs.where((log) {
+      final linkedAlerts = _alerts.where(
+        (alert) => alert.detectionLogId == log.id,
+      );
+      return _activeFilters.any(
+        (filter) => filter.matchesLog(log, linkedAlerts: linkedAlerts),
+      );
+    }).toList();
+  }
+
+  List<AlertModel> get _visibleAlerts {
+    if (_activeFilters.isEmpty) return _alerts;
+    return _alerts.where((alert) {
+      DetectionLogModel? linkedLog;
+      for (final log in _logs) {
+        if (log.id == alert.detectionLogId) {
+          linkedLog = log;
+          break;
+        }
+      }
+      return _activeFilters.any(
+        (filter) => filter.matchesAlert(alert, linkedLog: linkedLog),
+      );
+    }).toList();
+  }
+
+  void _toggleFilter(SecurityRecordFilter filter) {
+    setState(() {
+      final next = {..._activeFilters};
+      if (!next.add(filter)) next.remove(filter);
+      _activeFilters = next;
+    });
+  }
 
   @override
   void initState() {
@@ -234,8 +354,9 @@ class _LogsScreenState extends State<LogsScreen> {
       if (!mounted) return;
       showAppSnackBar(
         context,
-        message:
-            count == 1 ? 'Deleted selected alert.' : 'Deleted $count alerts.',
+        message: count == 1
+            ? 'Deleted selected alert.'
+            : 'Deleted $count alerts.',
         tone: AppMessageTone.success,
       );
     } catch (error) {
@@ -307,10 +428,12 @@ class _LogsScreenState extends State<LogsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final listHeight = (MediaQuery.sizeOf(context).height - 330)
-        .clamp(420.0, 760.0)
+    final listHeight = (MediaQuery.sizeOf(context).height - 400)
+        .clamp(360.0, 700.0)
         .toDouble();
     final unknownLabels = _UnknownPersonLabels(logs: _logs, alerts: _alerts);
+    final visibleLogs = _visibleLogs;
+    final visibleAlerts = _visibleAlerts;
 
     return DefaultTabController(
       length: 2,
@@ -333,19 +456,29 @@ class _LogsScreenState extends State<LogsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const TabBar(
+                  TabBar(
                     tabs: [
                       Tab(
                         icon: Icon(Icons.fact_check_outlined),
-                        text: 'Detection logs',
+                        text: 'Detection logs (${visibleLogs.length})',
                       ),
                       Tab(
                         icon: Icon(Icons.notifications_outlined),
-                        text: 'Alerts',
+                        text: 'Alerts (${visibleAlerts.length})',
                       ),
                     ],
                   ),
                   if (_loading) const LinearProgressIndicator(),
+                  const SizedBox(height: AppSpacing.sm),
+                  _SecurityFilterBar(
+                    selected: _activeFilters,
+                    visibleLogCount: visibleLogs.length,
+                    totalLogCount: _logs.length,
+                    visibleAlertCount: visibleAlerts.length,
+                    totalAlertCount: _alerts.length,
+                    onToggle: _toggleFilter,
+                    onClear: () => setState(() => _activeFilters = const {}),
+                  ),
                   if (_selectedLogIds.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.md),
                     _SelectionToolbar(
@@ -371,7 +504,9 @@ class _LogsScreenState extends State<LogsScreen> {
                     child: TabBarView(
                       children: [
                         _DetectionLogsTab(
-                          logs: _logs,
+                          logs: visibleLogs,
+                          totalCount: _logs.length,
+                          filtered: _activeFilters.isNotEmpty,
                           unknownLabels: unknownLabels,
                           loading: _loading,
                           deleting: _deletingLogs,
@@ -380,7 +515,9 @@ class _LogsScreenState extends State<LogsScreen> {
                           onDeleteAll: _deleteAllLogs,
                         ),
                         _AlertsTab(
-                          alerts: _alerts,
+                          alerts: visibleAlerts,
+                          totalCount: _alerts.length,
+                          filtered: _activeFilters.isNotEmpty,
                           unknownLabels: unknownLabels,
                           loading: _loading,
                           deleting: _deletingAlerts,
@@ -397,6 +534,131 @@ class _LogsScreenState extends State<LogsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SecurityFilterBar extends StatelessWidget {
+  const _SecurityFilterBar({
+    required this.selected,
+    required this.visibleLogCount,
+    required this.totalLogCount,
+    required this.visibleAlertCount,
+    required this.totalAlertCount,
+    required this.onToggle,
+    required this.onClear,
+  });
+
+  final Set<SecurityRecordFilter> selected;
+  final int visibleLogCount;
+  final int totalLogCount;
+  final int visibleAlertCount;
+  final int totalAlertCount;
+  final ValueChanged<SecurityRecordFilter> onToggle;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final title = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.filter_alt_outlined,
+                      size: 18,
+                      color: AppColors.teal,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      'Security filters',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: AppColors.text,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                );
+                final summary = Text(
+                  '$visibleLogCount/$totalLogCount logs • '
+                  '$visibleAlertCount/$totalAlertCount alerts',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+                final clearButton = selected.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: onClear,
+                        visualDensity: VisualDensity.compact,
+                        tooltip: context.tr('Clear filters'),
+                        icon: const Icon(
+                          Icons.filter_alt_off_outlined,
+                          size: 19,
+                        ),
+                      );
+
+                if (constraints.maxWidth < AppBreakpoints.compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [title, const Spacer(), ?clearButton]),
+                      const SizedBox(height: AppSpacing.xs),
+                      summary,
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [title, const Spacer(), summary, ?clearButton],
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.sm),
+                    child: FilterChip(
+                      label: Text('All events'),
+                      avatar: const Icon(Icons.select_all, size: 17),
+                      selected: selected.isEmpty,
+                      onSelected: (_) => onClear(),
+                    ),
+                  ),
+                  ...SecurityRecordFilter.values.map(
+                    (filter) => Padding(
+                      padding: const EdgeInsets.only(right: AppSpacing.sm),
+                      child: FilterChip(
+                        key: ValueKey('security-filter-${filter.name}'),
+                        label: Text(filter.label),
+                        avatar: Icon(filter.icon, size: 17),
+                        selected: selected.contains(filter),
+                        onSelected: (_) => onToggle(filter),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -434,19 +696,20 @@ class _UnknownPersonLabels {
       _restrictedAlertsByLogId[alert.detectionLogId!] = alert;
     }
 
-    final unlinkedUnknownAlerts = alerts
-        .where(
-          (alert) =>
-              _isUnknownAlert(alert) &&
-              (alert.detectionLogId == null ||
-                  !_labelsByLogId.containsKey(alert.detectionLogId)),
-        )
-        .toList()
-      ..sort((a, b) {
-        final timeComparison = a.createdAt.compareTo(b.createdAt);
-        if (timeComparison != 0) return timeComparison;
-        return a.id.compareTo(b.id);
-      });
+    final unlinkedUnknownAlerts =
+        alerts
+            .where(
+              (alert) =>
+                  _isUnknownAlert(alert) &&
+                  (alert.detectionLogId == null ||
+                      !_labelsByLogId.containsKey(alert.detectionLogId)),
+            )
+            .toList()
+          ..sort((a, b) {
+            final timeComparison = a.createdAt.compareTo(b.createdAt);
+            if (timeComparison != 0) return timeComparison;
+            return a.id.compareTo(b.id);
+          });
 
     final nextIndex = _labelsByLogId.length + 1;
     for (final entry in unlinkedUnknownAlerts.indexed) {
@@ -532,6 +795,8 @@ class _UnknownPersonLabels {
 class _DetectionLogsTab extends StatelessWidget {
   const _DetectionLogsTab({
     required this.logs,
+    required this.totalCount,
+    required this.filtered,
     required this.unknownLabels,
     required this.loading,
     required this.deleting,
@@ -541,6 +806,8 @@ class _DetectionLogsTab extends StatelessWidget {
   });
 
   final List<DetectionLogModel> logs;
+  final int totalCount;
+  final bool filtered;
   final _UnknownPersonLabels unknownLabels;
   final bool loading;
   final bool deleting;
@@ -560,7 +827,7 @@ class _DetectionLogsTab extends StatelessWidget {
         _TabActionRow(
           title: 'Live detection history',
           action: OutlinedButton.icon(
-            onPressed: logs.isEmpty || deleting ? null : onDeleteAll,
+            onPressed: totalCount == 0 || deleting ? null : onDeleteAll,
             icon: Icon(Icons.delete_sweep_outlined),
             label: Text('Delete all logs'),
           ),
@@ -568,10 +835,14 @@ class _DetectionLogsTab extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         Expanded(
           child: logs.isEmpty
-              ? const EmptyPanel(
+              ? EmptyPanel(
                   icon: Icons.inbox_outlined,
-                  title: 'No live detection logs',
-                  message: 'Start live surveillance to create history.',
+                  title: filtered
+                      ? 'No matching detection logs'
+                      : 'No live detection logs',
+                  message: filtered
+                      ? 'Try selecting a different security filter.'
+                      : 'Start live surveillance to create history.',
                 )
               : ListView.builder(
                   itemCount: logs.length,
@@ -596,6 +867,8 @@ class _DetectionLogsTab extends StatelessWidget {
 class _AlertsTab extends StatelessWidget {
   const _AlertsTab({
     required this.alerts,
+    required this.totalCount,
+    required this.filtered,
     required this.unknownLabels,
     required this.loading,
     required this.deleting,
@@ -606,6 +879,8 @@ class _AlertsTab extends StatelessWidget {
   });
 
   final List<AlertModel> alerts;
+  final int totalCount;
+  final bool filtered;
   final _UnknownPersonLabels unknownLabels;
   final bool loading;
   final bool deleting;
@@ -626,7 +901,7 @@ class _AlertsTab extends StatelessWidget {
         _TabActionRow(
           title: 'Alert inbox',
           action: OutlinedButton.icon(
-            onPressed: alerts.isEmpty || deleting ? null : onDeleteAll,
+            onPressed: totalCount == 0 || deleting ? null : onDeleteAll,
             icon: Icon(Icons.delete_sweep_outlined),
             label: Text('Delete all alerts'),
           ),
@@ -634,11 +909,14 @@ class _AlertsTab extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         Expanded(
           child: alerts.isEmpty
-              ? const EmptyPanel(
+              ? EmptyPanel(
                   icon: Icons.notifications_none,
-                  title: 'No persistent alerts',
-                  message:
-                      'Confirmed unknown people from live mode appear here.',
+                  title: filtered
+                      ? 'No matching alerts'
+                      : 'No persistent alerts',
+                  message: filtered
+                      ? 'Try selecting a different security filter.'
+                      : 'Confirmed unknown people from live mode appear here.',
                 )
               : ListView.builder(
                   itemCount: alerts.length,
@@ -677,9 +955,9 @@ class _TabActionRow extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.text,
-                  ),
+                fontWeight: FontWeight.w900,
+                color: AppColors.text,
+              ),
             ),
           ],
         );
@@ -805,10 +1083,7 @@ class _AlertRow extends StatelessWidget {
       icon: Stack(
         clipBehavior: Clip.none,
         children: [
-          Icon(
-            _categoryIcon,
-            color: _categoryColor,
-          ),
+          Icon(_categoryIcon, color: _categoryColor),
           if (!alert.isRead)
             Positioned(
               right: -1,
@@ -862,8 +1137,8 @@ class _SelectableRecordCard extends StatelessWidget {
     final borderColor = selected
         ? AppColors.teal
         : severe
-            ? AppColors.dangerBorder
-            : AppColors.border;
+        ? AppColors.dangerBorder
+        : AppColors.border;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Card(
@@ -902,9 +1177,7 @@ class _SelectableRecordCard extends StatelessWidget {
                             title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
+                            style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(
                                   fontWeight: FontWeight.w900,
                                   color: AppColors.text,
@@ -915,9 +1188,7 @@ class _SelectableRecordCard extends StatelessWidget {
                             '$subtitle · $timestamp',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: AppColors.textMuted),
                           ),
                         ],
@@ -984,9 +1255,9 @@ class _SelectionToolbar extends StatelessWidget {
               child: Text(
                 label,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AppColors.tealDark,
-                      fontWeight: FontWeight.w900,
-                    ),
+                  color: AppColors.tealDark,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
             TextButton(
