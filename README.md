@@ -17,7 +17,7 @@ raise security alerts, and answer questions about indexed surveillance footage.
 Only one heavy analysis pipeline can run at a time. Live surveillance and the
 temporary uploaded-video analyzer are therefore mutually exclusive.
 
-## Recommended: run with Docker
+## Method 1: run the web app with Docker
 
 Requirements: Git and Docker Desktop with Docker Compose.
 
@@ -74,7 +74,7 @@ Docker Desktop may not expose the host webcam to a Linux container. Uploaded
 video works normally in Docker. For reliable laptop-webcam access, use the local
 Windows or macOS setup below.
 
-## Local setup
+## Method 2: run the native app locally
 
 Requirements:
 
@@ -86,29 +86,61 @@ Requirements:
 
 ### Windows
 
-From the repository root:
+This method runs FastAPI from a project-local Python environment and Flutter as
+a native Windows desktop application. It is the recommended method when laptop
+webcam access is required.
+
+Requirements:
+
+- 64-bit Python 3.12 (the `py` launcher or `python` must be on `PATH`)
+- Flutter with Dart 3.11 or newer
+- Visual Studio 2022 with **Desktop development with C++** and a Windows SDK
+
+From PowerShell in the repository root, perform the one-time setup:
 
 ```powershell
 .\scripts\setup.ps1
 ```
 
 The script creates `.venv`, installs the Python and Flutter dependencies, and
-creates `backend\.env` from the committed example when needed.
+creates `backend\.env` from the committed example when needed. It also checks
+that Flutter can see the Visual Studio Windows desktop toolchain.
 
-Start the backend in one PowerShell terminal:
+For Video Q&A, put the Gemini key in the local backend configuration before
+starting the application:
+
+```dotenv
+# backend/.env
+GEMINI_API_KEY=your_key_here
+```
+
+Start the complete local application with one command:
+
+```powershell
+.\scripts\start_windows.ps1
+```
+
+This starts the backend in the background, waits until it is ready, and then
+runs Flutter on Windows. When Flutter exits, the backend process started by the
+script is stopped automatically. Backend startup logs are written to
+`backend\backend_server.out.log` and `backend\backend_server.err.log`.
+
+Alternatively, run the two components in separate terminals. In the first
+terminal:
 
 ```powershell
 .\scripts\start_backend.ps1
 ```
 
-Start Flutter in another:
+In the second terminal:
 
 ```powershell
 .\scripts\start_flutter.ps1
 ```
 
-To use Video Q&A, edit `backend\.env` and set `GEMINI_API_KEY` before starting
-the backend.
+The local Windows backend stores its database, uploaded files, and downloaded
+models under `backend\`. Docker uses separate named volumes, so Docker and local
+mode do not share runtime data by default.
 
 ### macOS or Linux
 

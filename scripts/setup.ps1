@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$SkipBackend,
-    [switch]$SkipFlutter
+    [switch]$SkipFlutter,
+    [switch]$SkipToolchainCheck
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,19 +14,60 @@ $backendEnvExample = Join-Path $projectRoot "backend\.env.example"
 
 Set-Location -LiteralPath $projectRoot
 
-if (-not $SkipBackend) {
-    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-        throw "Python 3.12 is required but 'python' was not found on PATH."
+function Get-Python312Command {
+    $candidates = @()
+
+    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyLauncher) {
+        $candidates += [pscustomobject]@{
+            Executable = $pyLauncher.Source
+            PrefixArguments = @("-3.12")
+            DisplayName = "py -3.12"
+        }
     }
 
-    $pythonVersion = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-    if ($LASTEXITCODE -ne 0 -or $pythonVersion -ne "3.12") {
-        throw "Python 3.12 is required. Detected: $pythonVersion"
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        $candidates += [pscustomobject]@{
+            Executable = $python.Source
+            PrefixArguments = @()
+            DisplayName = "python"
+        }
     }
+
+    foreach ($candidate in $candidates) {
+        $arguments = @($candidate.PrefixArguments) + @(
+            "-c",
+            "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+        )
+        $version = & $candidate.Executable @arguments 2>$null
+        if ($LASTEXITCODE -eq 0 -and $version -eq "3.12") {
+            return $candidate
+        }
+    }
+
+    throw "Python 3.12 was not found. Install 64-bit Python 3.12 and enable the Python launcher or add Python to PATH."
+}
+
+function Invoke-PythonCommand {
+    param(
+        [Parameter(Mandatory)]$PythonCommand,
+        [Parameter(Mandatory)][string[]]$Arguments
+    )
+
+    $allArguments = @($PythonCommand.PrefixArguments) + $Arguments
+    & $PythonCommand.Executable @allArguments
+}
+
+if (-not $SkipBackend) {
+    $pythonCommand = Get-Python312Command
+    Write-Host "Using Python 3.12 from $($pythonCommand.DisplayName)."
 
     if (-not (Test-Path -LiteralPath $venvPython)) {
         Write-Host "Creating Python virtual environment..."
-        python -m venv $venvPath
+        Invoke-PythonCommand -PythonCommand $pythonCommand -Arguments @(
+            "-m", "venv", $venvPath
+        )
         if ($LASTEXITCODE -ne 0) { throw "Failed to create .venv." }
     }
 
@@ -34,6 +76,9 @@ if (-not $SkipBackend) {
     if ($LASTEXITCODE -ne 0) { throw "Failed to update Python packaging tools." }
     & $venvPython -m pip install -r (Join-Path $projectRoot "backend\requirements.txt")
     if ($LASTEXITCODE -ne 0) { throw "Failed to install backend dependencies." }
+
+    & $venvPython -c "import fastapi, uvicorn, cv2, numpy, onnxruntime; print('Backend dependencies verified.')"
+    if ($LASTEXITCODE -ne 0) { throw "Backend dependency verification failed." }
 
     if (-not (Test-Path -LiteralPath $backendEnv)) {
         Copy-Item -LiteralPath $backendEnvExample -Destination $backendEnv
@@ -44,6 +89,19 @@ if (-not $SkipBackend) {
 if (-not $SkipFlutter) {
     if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
         throw "Flutter is required but 'flutter' was not found on PATH."
+    }
+
+    if (-not $SkipToolchainCheck) {
+        Write-Host "Checking the Flutter Windows toolchain..."
+        flutter config --enable-windows-desktop
+        if ($LASTEXITCODE -ne 0) { throw "Could not enable Flutter Windows desktop support." }
+
+        $doctorOutput = flutter doctor -v 2>&1
+        $doctorText = $doctorOutput -join [Environment]::NewLine
+        Write-Host $doctorText
+        if ($doctorText -notmatch "Visual Studio - develop Windows apps") {
+            throw "Flutter cannot find the Visual Studio Windows desktop toolchain. Install Visual Studio 2022 with Desktop development with C++."
+        }
     }
 
     Write-Host "Installing Flutter dependencies..."
@@ -57,5 +115,5 @@ if (-not $SkipFlutter) {
 }
 
 Write-Host "Setup complete."
-Write-Host "Backend: .\scripts\start_backend.ps1"
-Write-Host "Flutter: .\scripts\start_flutter.ps1"
+Write-Host "One-command Windows run: .\scripts\start_windows.ps1"
+Write-Host "Two-terminal run: .\scripts\start_backend.ps1, then .\scripts\start_flutter.ps1"

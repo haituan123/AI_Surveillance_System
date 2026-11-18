@@ -1,11 +1,13 @@
 $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
-$pythonCommand = if (Test-Path -LiteralPath $venvPython) { $venvPython } else { "python" }
+if (-not (Test-Path -LiteralPath $venvPython)) {
+    throw "The local Python environment is missing. Run: .\scripts\setup.ps1"
+}
 Set-Location -LiteralPath $projectRoot
 
 $env:PYTHONDONTWRITEBYTECODE = "1"
-& $pythonCommand -m unittest discover -s backend/tests -v
+& $venvPython -m unittest discover -s backend/tests -v
 if ($LASTEXITCODE -ne 0) {
     throw "Backend tests failed."
 }

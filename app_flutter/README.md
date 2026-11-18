@@ -31,7 +31,14 @@ requires `GEMINI_API_KEY` in the backend environment.
 See the root `README.md` for full Windows/macOS setup, backend setup, model
 download, and run instructions.
 
-Quick run after the backend is already running:
+On Windows, the root project provides a one-command native launcher after
+running `scripts\setup.ps1` once:
+
+```powershell
+.\scripts\start_windows.ps1
+```
+
+Quick run from this directory after the backend is already running:
 
 ```bash
 flutter pub get
