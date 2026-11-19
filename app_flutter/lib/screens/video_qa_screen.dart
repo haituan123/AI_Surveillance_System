@@ -21,6 +21,8 @@ class VideoQAScreen extends StatefulWidget {
 }
 
 class _VideoQAScreenState extends State<VideoQAScreen> {
+  static const _textScaleBoost = 1.12;
+
   final QAService _qaService = QAService();
   final TextEditingController _questionController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -383,59 +385,70 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final mediaQuery = MediaQuery.of(context);
+    final viewportWidth = mediaQuery.size.width;
     final isDesktop = viewportWidth >= AppBreakpoints.compact;
     final historySidebarWidth = (viewportWidth * 0.22)
         .clamp(280.0, 340.0)
         .toDouble();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Row(
-        children: [
-          // Sidebar lịch sử (nếu là màn hình lớn)
-          if (isDesktop && _showHistory)
-            Container(
-              key: const ValueKey('conversation-history-sidebar'),
-              width: historySidebarWidth,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                border: Border(right: BorderSide(color: AppColors.border)),
-              ),
-              child: _buildConversationSidebar(),
-            ),
+    // This screen is information-dense, but it should still use the same
+    // comfortable reading scale as the rest of the desktop application.
+    final inheritedTextScale = mediaQuery.textScaler.scale(16) / 16;
 
-          // Main Chat Area
-          Expanded(
-            child: Column(
-              children: [
-                _buildHeader(isDesktop),
-                _buildScopeAndPromptsBar(),
-                Divider(height: 1, color: AppColors.border),
-                Expanded(
-                  child:
-                      MediaQuery.sizeOf(context).width >= AppBreakpoints.desktop
-                      ? _buildWideChatWorkspace()
-                      : Column(
-                          children: [
-                            _buildVideoWorkspace(),
-                            Divider(height: 1, color: AppColors.border),
-                            Expanded(child: _buildChatBody()),
-                            _buildInputBar(),
-                          ],
-                        ),
+    return MediaQuery(
+      data: mediaQuery.copyWith(
+        textScaler: TextScaler.linear(inheritedTextScale * _textScaleBoost),
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Row(
+          children: [
+            // Sidebar lịch sử (nếu là màn hình lớn)
+            if (isDesktop && _showHistory)
+              Container(
+                key: const ValueKey('conversation-history-sidebar'),
+                width: historySidebarWidth,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border(right: BorderSide(color: AppColors.border)),
                 ),
-              ],
+                child: _buildConversationSidebar(),
+              ),
+
+            // Main Chat Area
+            Expanded(
+              child: Column(
+                children: [
+                  _buildHeader(isDesktop),
+                  _buildScopeAndPromptsBar(),
+                  Divider(height: 1, color: AppColors.border),
+                  Expanded(
+                    child:
+                        MediaQuery.sizeOf(context).width >=
+                            AppBreakpoints.desktop
+                        ? _buildWideChatWorkspace()
+                        : Column(
+                            children: [
+                              _buildVideoWorkspace(),
+                              Divider(height: 1, color: AppColors.border),
+                              Expanded(child: _buildChatBody()),
+                              _buildInputBar(),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildHeader(bool isDesktop) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
@@ -454,12 +467,12 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
             const SizedBox(width: 4),
           ],
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: AppColors.tealSoft,
               borderRadius: BorderRadius.circular(AppRadii.sm),
             ),
-            child: Icon(Icons.psychology, color: AppColors.teal, size: 24),
+            child: Icon(Icons.psychology, color: AppColors.teal, size: 28),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -469,26 +482,27 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                 Text(
                   'Hỏi đáp video giám sát',
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
                     color: AppColors.text,
                   ),
                 ),
                 Text(
                   'Chọn video, đặt câu hỏi và kiểm tra bằng chứng theo thời gian',
-                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  style: TextStyle(fontSize: 14, color: AppColors.textMuted),
                 ),
               ],
             ),
           ),
           ElevatedButton.icon(
             onPressed: _createNewConversation,
-            icon: Icon(Icons.add, size: 18),
+            icon: Icon(Icons.add, size: 20),
             label: Text('Phiên mới'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.teal,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              minimumSize: const Size(48, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadii.sm),
               ),
@@ -501,7 +515,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
 
   Widget _buildScopeAndPromptsBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
+      padding: const EdgeInsets.fromLTRB(24, 14, 24, 12),
       color: AppColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -548,10 +562,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.teal,
                   side: BorderSide(color: AppColors.borderStrong),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
+                  minimumSize: const Size(48, 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppRadii.sm),
                   ),
@@ -608,8 +620,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                       ),
                   ],
                   child: Container(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceSubtle,
                       borderRadius: BorderRadius.circular(AppRadii.sm),
@@ -631,7 +643,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -978,8 +990,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
   }
 
   Widget _buildVideoRail() {
-    const expandedWidth = 360.0;
-    const collapsedWidth = 52.0;
+    const expandedWidth = 400.0;
+    const collapsedWidth = 60.0;
     final selectedVideo = _videoForId(_selectedScope);
     final videos = <QAUploadedVideoModel>[
       ?selectedVideo,
@@ -1005,8 +1017,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                 child: Column(
                   children: [
                     Container(
-                      height: 52,
-                      padding: const EdgeInsets.only(left: 14, right: 4),
+                      height: 60,
+                      padding: const EdgeInsets.only(left: 18, right: 6),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         border: Border(
@@ -1018,7 +1030,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                           Icon(
                             Icons.video_library_outlined,
                             color: AppColors.teal,
-                            size: 20,
+                            size: 24,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -1026,7 +1038,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                               'Video (${_uploadedVideos.length})',
                               style: TextStyle(
                                 color: AppColors.text,
-                                fontSize: 13,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -1106,13 +1118,14 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
             Icon(
               Icons.video_library_outlined,
               color: AppColors.textSubtle,
-              size: 34,
+              size: 44,
             ),
             const SizedBox(height: 10),
             Text(
               'Chưa có video',
               style: TextStyle(
                 color: AppColors.text,
+                fontSize: 16,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1247,14 +1260,14 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
           children: [
             Icon(
               Icons.video_library_outlined,
-              size: 56,
+              size: 64,
               color: AppColors.teal.withAlpha(90),
             ),
             const SizedBox(height: 16),
             Text(
               'Bắt đầu đặt câu hỏi về dữ liệu camera giám sát',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 19,
                 fontWeight: FontWeight.w600,
                 color: AppColors.text,
               ),
@@ -1262,7 +1275,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
             const SizedBox(height: 8),
             Text(
               'Ví dụ: "Có ai lấy balo không?", "Có người nào cầm dao không?", "Ai mặc áo đỏ?"',
-              style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+              style: TextStyle(fontSize: 14, color: AppColors.textMuted),
             ),
           ],
         ),
@@ -1824,7 +1837,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
 
   Widget _buildInputBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 14),
+      padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border)),
@@ -1846,7 +1859,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
               Text(
                 'Phạm vi: ${_scopeLabel()}',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: AppColors.textMuted,
                 ),
@@ -1862,7 +1875,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   decoration: InputDecoration(
                     hintText: context.tr('Đặt câu hỏi về video đã chọn...'),
                     hintStyle: TextStyle(
-                      fontSize: 13,
+                      fontSize: 15,
                       color: AppColors.textSubtle,
                     ),
                     filled: true,
@@ -1889,8 +1902,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
               ),
               const SizedBox(width: 10),
               SizedBox(
-                height: 46,
-                width: 46,
+                height: 52,
+                width: 52,
                 child: ElevatedButton(
                   onPressed: _sending ? null : () => _handleSend(),
                   style: ElevatedButton.styleFrom(

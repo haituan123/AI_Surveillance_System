@@ -101,16 +101,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     final videoRail = find.byKey(const ValueKey('video-rail'));
-    expect(tester.getSize(videoRail).width, 360);
+    expect(tester.getSize(videoRail).width, 400);
 
     await tester.tap(find.byKey(const ValueKey('collapse-video-rail')));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.getSize(videoRail).width, 52);
+    expect(tester.getSize(videoRail).width, 60);
     expect(find.byKey(const ValueKey('expand-video-rail')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('expand-video-rail')));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.getSize(videoRail).width, 360);
+    expect(tester.getSize(videoRail).width, 400);
   });
 
   testWidgets('conversation history opens at a readable desktop width', (

@@ -50,6 +50,15 @@ extension SecurityRecordFilterDetails on SecurityRecordFilter {
     SecurityRecordFilter.robberyTheft => Icons.front_hand_outlined,
   };
 
+  Color get accentColor => switch (this) {
+    SecurityRecordFilter.knownPerson => AppColors.success,
+    SecurityRecordFilter.unknownPerson => AppColors.warning,
+    SecurityRecordFilter.fighting => AppColors.danger,
+    SecurityRecordFilter.fireSmoke => Colors.deepOrange,
+    SecurityRecordFilter.shooting => Colors.deepPurple,
+    SecurityRecordFilter.robberyTheft => Colors.brown,
+  };
+
   bool matchesLog(
     DetectionLogModel log, {
     Iterable<AlertModel> linkedAlerts = const [],
@@ -480,113 +489,191 @@ class _LogsScreenState extends State<LogsScreen> {
     final visibleLogs = _visibleLogs;
     final visibleAlerts = _visibleAlerts;
     final visibleEvents = _visibleEvents;
+    final records = _UnifiedSecurityRecord.merge(
+      logs: visibleLogs,
+      alerts: visibleAlerts,
+      events: visibleEvents,
+    );
 
-    return DefaultTabController(
-      length: 3,
-      child: AppPage(
-        maxWidth: AppLayout.dataMaxWidth,
-        children: [
-          HeaderBlock(
-            title: 'Persistent Logs & Alerts',
-            subtitle:
-                'Review live detections, alerts, and indexed security events in one place.',
-            icon: Icons.receipt_long,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          if (_error != null)
-            _ErrorPanel(message: _error!, onRetry: _busy ? null : _refresh),
-          if (_error != null) const SizedBox(height: AppSpacing.md),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TabBar(
-                    tabs: [
-                      Tab(
-                        icon: Icon(Icons.fact_check_outlined),
-                        text: 'Detection logs (${visibleLogs.length})',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.notifications_outlined),
-                        text: 'Alerts (${visibleAlerts.length})',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.shield_outlined),
-                        text: 'Security events (${visibleEvents.length})',
-                      ),
-                    ],
-                  ),
-                  if (_loading) const LinearProgressIndicator(),
-                  const SizedBox(height: AppSpacing.sm),
-                  _SecurityFilterBar(
-                    selected: _activeFilters,
-                    visibleLogCount: visibleLogs.length,
-                    totalLogCount: _logs.length,
-                    visibleAlertCount: visibleAlerts.length,
-                    totalAlertCount: _alerts.length,
-                    visibleEventCount: visibleEvents.length,
-                    totalEventCount: _events.length,
-                    onToggle: _toggleFilter,
-                    onClear: () => setState(() => _activeFilters = const {}),
-                  ),
-                  if (_selectedLogIds.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _SelectionToolbar(
-                      label: '${_selectedLogIds.length} log selected',
-                      deleting: _deletingLogs,
-                      onClear: () => setState(() => _selectedLogIds = const {}),
-                      onDelete: _deleteSelectedLogs,
-                    ),
-                  ],
-                  if (_selectedAlertIds.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _SelectionToolbar(
-                      label: '${_selectedAlertIds.length} alert selected',
-                      deleting: _deletingAlerts,
-                      onClear: () =>
-                          setState(() => _selectedAlertIds = const {}),
-                      onDelete: _deleteSelectedAlerts,
-                    ),
-                  ],
+    return AppPage(
+      maxWidth: AppLayout.dataMaxWidth,
+      children: [
+        HeaderBlock(
+          title: 'Persistent Logs & Alerts',
+          subtitle:
+              'Review live detections, alerts, and indexed security events in one place.',
+          icon: Icons.receipt_long,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (_error != null)
+          _ErrorPanel(message: _error!, onRetry: _busy ? null : _refresh),
+        if (_error != null) const SizedBox(height: AppSpacing.md),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _RecordSummary(
+                  logCount: visibleLogs.length,
+                  alertCount: visibleAlerts.length,
+                  eventCount: visibleEvents.length,
+                ),
+                if (_loading) const LinearProgressIndicator(),
+                const SizedBox(height: AppSpacing.sm),
+                _SecurityFilterBar(
+                  selected: _activeFilters,
+                  visibleLogCount: visibleLogs.length,
+                  totalLogCount: _logs.length,
+                  visibleAlertCount: visibleAlerts.length,
+                  totalAlertCount: _alerts.length,
+                  visibleEventCount: visibleEvents.length,
+                  totalEventCount: _events.length,
+                  onToggle: _toggleFilter,
+                  onClear: () => setState(() => _activeFilters = const {}),
+                ),
+                if (_selectedLogIds.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.md),
-                  SizedBox(
-                    height: listHeight,
-                    child: TabBarView(
-                      children: [
-                        _DetectionLogsTab(
-                          logs: visibleLogs,
-                          totalCount: _logs.length,
-                          filtered: _activeFilters.isNotEmpty,
-                          unknownLabels: unknownLabels,
-                          loading: _loading,
-                          deleting: _deletingLogs,
-                          selectedIds: _selectedLogIds,
-                          onToggleSelection: _toggleLogSelection,
-                          onDeleteAll: _deleteAllLogs,
-                        ),
-                        _AlertsTab(
-                          alerts: visibleAlerts,
-                          totalCount: _alerts.length,
-                          filtered: _activeFilters.isNotEmpty,
-                          unknownLabels: unknownLabels,
-                          loading: _loading,
-                          deleting: _deletingAlerts,
-                          selectedIds: _selectedAlertIds,
-                          onToggleSelection: _toggleAlertSelection,
-                          onToggleRead: _toggleRead,
-                          onDeleteAll: _deleteAllAlerts,
-                        ),
-                        _SecurityEventsTab(
-                          events: visibleEvents,
-                          filtered: _activeFilters.isNotEmpty,
-                          loading: _loading,
-                        ),
-                      ],
-                    ),
+                  _SelectionToolbar(
+                    label: '${_selectedLogIds.length} log selected',
+                    deleting: _deletingLogs,
+                    onClear: () => setState(() => _selectedLogIds = const {}),
+                    onDelete: _deleteSelectedLogs,
                   ),
                 ],
+                if (_selectedAlertIds.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _SelectionToolbar(
+                    label: '${_selectedAlertIds.length} alert selected',
+                    deleting: _deletingAlerts,
+                    onClear: () => setState(() => _selectedAlertIds = const {}),
+                    onDelete: _deleteSelectedAlerts,
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.md),
+                SizedBox(
+                  height: listHeight,
+                  child: _UnifiedRecordsFeed(
+                    records: records,
+                    filtered: _activeFilters.isNotEmpty,
+                    unknownLabels: unknownLabels,
+                    loading: _loading,
+                    deletingLogs: _deletingLogs,
+                    deletingAlerts: _deletingAlerts,
+                    selectedLogIds: _selectedLogIds,
+                    selectedAlertIds: _selectedAlertIds,
+                    onToggleLogSelection: _toggleLogSelection,
+                    onToggleAlertSelection: _toggleAlertSelection,
+                    onToggleAlertRead: _toggleRead,
+                    onDeleteAllLogs: _deleteAllLogs,
+                    onDeleteAllAlerts: _deleteAllAlerts,
+                    totalLogCount: _logs.length,
+                    totalAlertCount: _alerts.length,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecordSummary extends StatelessWidget {
+  const _RecordSummary({
+    required this.logCount,
+    required this.alertCount,
+    required this.eventCount,
+  });
+
+  final int logCount;
+  final int alertCount;
+  final int eventCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = [
+      _RecordCountChip(
+        icon: Icons.fact_check_outlined,
+        label: 'Detection logs',
+        count: logCount,
+        color: AppColors.teal,
+      ),
+      _RecordCountChip(
+        icon: Icons.notifications_outlined,
+        label: 'Alerts',
+        count: alertCount,
+        color: AppColors.danger,
+      ),
+      _RecordCountChip(
+        icon: Icons.video_library_outlined,
+        label: 'Security & video events',
+        count: eventCount,
+        color: AppColors.warning,
+      ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < AppBreakpoints.compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final chip in chips) ...[
+                  chip,
+                  if (chip != chips.last) const SizedBox(height: AppSpacing.sm),
+                ],
+              ],
+            );
+          }
+          return Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: chips,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RecordCountChip extends StatelessWidget {
+  const _RecordCountChip({
+    required this.icon,
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withAlpha(18),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+        border: Border.all(color: color.withAlpha(90)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              '$label ($count)',
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: AppColors.text,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -626,6 +713,7 @@ class _SecurityFilterBar extends StatelessWidget {
     Widget buildFilterChip({
       required String label,
       required IconData icon,
+      required Color accentColor,
       required bool selected,
       required ValueChanged<bool> onSelected,
       Key? key,
@@ -639,11 +727,11 @@ class _SecurityFilterBar extends StatelessWidget {
         ),
         avatar: Icon(icon, size: 17, color: foreground),
         selected: selected,
-        selectedColor: AppColors.teal,
+        selectedColor: accentColor,
         checkmarkColor: Colors.white,
         showCheckmark: false,
         side: BorderSide(
-          color: selected ? AppColors.teal : AppColors.borderStrong,
+          color: selected ? accentColor : AppColors.borderStrong,
           width: selected ? 2 : 1,
         ),
         onSelected: onSelected,
@@ -729,6 +817,7 @@ class _SecurityFilterBar extends StatelessWidget {
                     child: buildFilterChip(
                       label: 'All events',
                       icon: Icons.select_all,
+                      accentColor: AppColors.teal,
                       selected: selected.isEmpty,
                       onSelected: (_) => onClear(),
                     ),
@@ -740,6 +829,7 @@ class _SecurityFilterBar extends StatelessWidget {
                         key: ValueKey('security-filter-${filter.name}'),
                         label: filter.label,
                         icon: filter.icon,
+                        accentColor: filter.accentColor,
                         selected: selected.contains(filter),
                         onSelected: (_) => onToggle(filter),
                       ),
@@ -883,69 +973,169 @@ class _UnknownPersonLabels {
   }
 }
 
-class _DetectionLogsTab extends StatelessWidget {
-  const _DetectionLogsTab({
-    required this.logs,
-    required this.totalCount,
+enum _UnifiedRecordKind { detection, alert, securityEvent }
+
+class _UnifiedSecurityRecord {
+  const _UnifiedSecurityRecord._({
+    required this.kind,
+    required this.id,
+    required this.occurredAt,
+    this.log,
+    this.alert,
+    this.event,
+  });
+
+  factory _UnifiedSecurityRecord.fromLog(DetectionLogModel log) =>
+      _UnifiedSecurityRecord._(
+        kind: _UnifiedRecordKind.detection,
+        id: log.id,
+        occurredAt: _parseTimestamp(log.detectedAt),
+        log: log,
+      );
+
+  factory _UnifiedSecurityRecord.fromAlert(AlertModel alert) =>
+      _UnifiedSecurityRecord._(
+        kind: _UnifiedRecordKind.alert,
+        id: alert.id,
+        occurredAt: _parseTimestamp(alert.createdAt),
+        alert: alert,
+      );
+
+  factory _UnifiedSecurityRecord.fromEvent(SecurityEventModel event) =>
+      _UnifiedSecurityRecord._(
+        kind: _UnifiedRecordKind.securityEvent,
+        id: event.id,
+        occurredAt: _parseTimestamp(event.createdAt),
+        event: event,
+      );
+
+  final _UnifiedRecordKind kind;
+  final int id;
+  final DateTime occurredAt;
+  final DetectionLogModel? log;
+  final AlertModel? alert;
+  final SecurityEventModel? event;
+
+  static DateTime _parseTimestamp(String value) =>
+      DateTime.tryParse(value)?.toUtc() ??
+      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+
+  static List<_UnifiedSecurityRecord> merge({
+    required List<DetectionLogModel> logs,
+    required List<AlertModel> alerts,
+    required List<SecurityEventModel> events,
+  }) {
+    final records = <_UnifiedSecurityRecord>[
+      ...logs.map(_UnifiedSecurityRecord.fromLog),
+      ...alerts.map(_UnifiedSecurityRecord.fromAlert),
+      ...events.map(_UnifiedSecurityRecord.fromEvent),
+    ];
+    records.sort((a, b) {
+      final byTime = b.occurredAt.compareTo(a.occurredAt);
+      if (byTime != 0) return byTime;
+      final byKind = a.kind.index.compareTo(b.kind.index);
+      if (byKind != 0) return byKind;
+      return b.id.compareTo(a.id);
+    });
+    return records;
+  }
+}
+
+class _UnifiedRecordsFeed extends StatelessWidget {
+  const _UnifiedRecordsFeed({
+    required this.records,
     required this.filtered,
     required this.unknownLabels,
     required this.loading,
-    required this.deleting,
-    required this.selectedIds,
-    required this.onToggleSelection,
-    required this.onDeleteAll,
+    required this.deletingLogs,
+    required this.deletingAlerts,
+    required this.selectedLogIds,
+    required this.selectedAlertIds,
+    required this.onToggleLogSelection,
+    required this.onToggleAlertSelection,
+    required this.onToggleAlertRead,
+    required this.onDeleteAllLogs,
+    required this.onDeleteAllAlerts,
+    required this.totalLogCount,
+    required this.totalAlertCount,
   });
 
-  final List<DetectionLogModel> logs;
-  final int totalCount;
+  final List<_UnifiedSecurityRecord> records;
   final bool filtered;
   final _UnknownPersonLabels unknownLabels;
   final bool loading;
-  final bool deleting;
-  final Set<int> selectedIds;
-  final void Function(DetectionLogModel log, bool selected) onToggleSelection;
-  final VoidCallback onDeleteAll;
+  final bool deletingLogs;
+  final bool deletingAlerts;
+  final Set<int> selectedLogIds;
+  final Set<int> selectedAlertIds;
+  final void Function(DetectionLogModel log, bool selected)
+  onToggleLogSelection;
+  final void Function(AlertModel alert, bool selected) onToggleAlertSelection;
+  final ValueChanged<AlertModel> onToggleAlertRead;
+  final VoidCallback onDeleteAllLogs;
+  final VoidCallback onDeleteAllAlerts;
+  final int totalLogCount;
+  final int totalAlertCount;
 
   @override
   Widget build(BuildContext context) {
-    if (loading && logs.isEmpty) {
-      return const _LoadingRows(label: 'Loading detection logs');
+    if (loading && records.isEmpty) {
+      return const _LoadingRows(label: 'Loading security activity');
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _TabActionRow(
-          title: 'Live detection history',
-          action: OutlinedButton.icon(
-            onPressed: totalCount == 0 || deleting ? null : onDeleteAll,
-            icon: Icon(Icons.delete_sweep_outlined),
-            label: Text('Delete all logs'),
+          title: 'All security activity (${records.length})',
+          action: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              OutlinedButton.icon(
+                onPressed: totalLogCount == 0 || deletingLogs
+                    ? null
+                    : onDeleteAllLogs,
+                icon: const Icon(Icons.delete_sweep_outlined),
+                label: Text('Delete all logs'),
+              ),
+              OutlinedButton.icon(
+                onPressed: totalAlertCount == 0 || deletingAlerts
+                    ? null
+                    : onDeleteAllAlerts,
+                icon: const Icon(Icons.notifications_off_outlined),
+                label: Text('Delete all alerts'),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Expanded(
-          child: logs.isEmpty
+          child: records.isEmpty
               ? EmptyPanel(
                   icon: Icons.inbox_outlined,
                   title: filtered
-                      ? 'No matching detection logs'
-                      : 'No live detection logs',
+                      ? 'No matching security activity'
+                      : 'No security activity yet',
                   message: filtered
                       ? 'Try selecting a different security filter.'
-                      : 'Start live surveillance to create history.',
+                      : 'Live detections, alerts, and uploaded-video events will appear here.',
                 )
               : ListView.builder(
-                  itemCount: logs.length,
+                  itemCount: records.length,
                   itemBuilder: (context, index) {
-                    final log = logs[index];
-                    return _DetectionLogRow(
-                      log: log,
-                      title: unknownLabels.labelForLog(log),
-                      selected: selectedIds.contains(log.id),
-                      deleting: deleting,
-                      onSelected: (selected) =>
-                          onToggleSelection(log, selected),
+                    final record = records[index];
+                    return KeyedSubtree(
+                      key: ValueKey('unified-${record.kind.name}-${record.id}'),
+                      child: switch (record.kind) {
+                        _UnifiedRecordKind.detection => _buildDetection(
+                          record.log!,
+                        ),
+                        _UnifiedRecordKind.alert => _buildAlert(record.alert!),
+                        _UnifiedRecordKind.securityEvent => _SecurityEventRow(
+                          event: record.event!,
+                        ),
+                      },
                     );
                   },
                 ),
@@ -953,127 +1143,23 @@ class _DetectionLogsTab extends StatelessWidget {
       ],
     );
   }
-}
 
-class _AlertsTab extends StatelessWidget {
-  const _AlertsTab({
-    required this.alerts,
-    required this.totalCount,
-    required this.filtered,
-    required this.unknownLabels,
-    required this.loading,
-    required this.deleting,
-    required this.selectedIds,
-    required this.onToggleSelection,
-    required this.onToggleRead,
-    required this.onDeleteAll,
-  });
+  Widget _buildDetection(DetectionLogModel log) => _DetectionLogRow(
+    log: log,
+    title: unknownLabels.labelForLog(log),
+    selected: selectedLogIds.contains(log.id),
+    deleting: deletingLogs,
+    onSelected: (selected) => onToggleLogSelection(log, selected),
+  );
 
-  final List<AlertModel> alerts;
-  final int totalCount;
-  final bool filtered;
-  final _UnknownPersonLabels unknownLabels;
-  final bool loading;
-  final bool deleting;
-  final Set<int> selectedIds;
-  final void Function(AlertModel alert, bool selected) onToggleSelection;
-  final ValueChanged<AlertModel> onToggleRead;
-  final VoidCallback onDeleteAll;
-
-  @override
-  Widget build(BuildContext context) {
-    if (loading && alerts.isEmpty) {
-      return const _LoadingRows(label: 'Loading alerts');
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _TabActionRow(
-          title: 'Alert inbox',
-          action: OutlinedButton.icon(
-            onPressed: totalCount == 0 || deleting ? null : onDeleteAll,
-            icon: Icon(Icons.delete_sweep_outlined),
-            label: Text('Delete all alerts'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Expanded(
-          child: alerts.isEmpty
-              ? EmptyPanel(
-                  icon: Icons.notifications_none,
-                  title: filtered
-                      ? 'No matching alerts'
-                      : 'No persistent alerts',
-                  message: filtered
-                      ? 'Try selecting a different security filter.'
-                      : 'Confirmed unknown people from live mode appear here.',
-                )
-              : ListView.builder(
-                  itemCount: alerts.length,
-                  itemBuilder: (context, index) {
-                    final alert = alerts[index];
-                    return _AlertRow(
-                      alert: alert,
-                      title: unknownLabels.labelForAlert(alert),
-                      selected: selectedIds.contains(alert.id),
-                      deleting: deleting,
-                      onSelected: (selected) =>
-                          onToggleSelection(alert, selected),
-                      onToggleRead: () => onToggleRead(alert),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SecurityEventsTab extends StatelessWidget {
-  const _SecurityEventsTab({
-    required this.events,
-    required this.filtered,
-    required this.loading,
-  });
-
-  final List<SecurityEventModel> events;
-  final bool filtered;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    if (loading && events.isEmpty) {
-      return const _LoadingRows(label: 'Loading security events');
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const _TabActionRow(
-          title: 'Indexed security events',
-          action: SizedBox.shrink(),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Expanded(
-          child: events.isEmpty
-              ? EmptyPanel(
-                  icon: Icons.shield_outlined,
-                  title: filtered
-                      ? 'No matching security events'
-                      : 'No indexed security events',
-                  message: filtered
-                      ? 'Try selecting a different security filter.'
-                      : 'Analyze a Q&A video to create security events.',
-                )
-              : ListView.builder(
-                  itemCount: events.length,
-                  itemBuilder: (context, index) =>
-                      _SecurityEventRow(event: events[index]),
-                ),
-        ),
-      ],
-    );
-  }
+  Widget _buildAlert(AlertModel alert) => _AlertRow(
+    alert: alert,
+    title: unknownLabels.labelForAlert(alert),
+    selected: selectedAlertIds.contains(alert.id),
+    deleting: deletingAlerts,
+    onSelected: (selected) => onToggleAlertSelection(alert, selected),
+    onToggleRead: () => onToggleAlertRead(alert),
+  );
 }
 
 class _SecurityEventRow extends StatelessWidget {
@@ -1132,6 +1218,10 @@ class _SecurityEventRow extends StatelessWidget {
     return _SelectableRecordCard(
       selected: false,
       severe: _danger,
+      recordType: event.sourceType == 'qa_video'
+          ? 'UPLOADED VIDEO EVENT'
+          : 'SECURITY EVENT',
+      recordTypeColor: AppColors.warning,
       icon: Icon(_icon, color: _danger ? AppColors.danger : AppColors.warning),
       title: '$_title • Confidence $confidence',
       subtitle: '${event.sourceName}$object • $range',
@@ -1209,6 +1299,8 @@ class _DetectionLogRow extends StatelessWidget {
     return _SelectableRecordCard(
       selected: selected,
       severe: !isKnown,
+      recordType: 'DETECTION LOG',
+      recordTypeColor: AppColors.teal,
       icon: Icon(
         isKnown ? Icons.verified_user : Icons.person_search,
         color: isKnown ? AppColors.success : AppColors.warning,
@@ -1282,6 +1374,8 @@ class _AlertRow extends StatelessWidget {
     return _SelectableRecordCard(
       selected: selected,
       severe: !alert.isRead,
+      recordType: 'ALERT',
+      recordTypeColor: AppColors.danger,
       icon: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1322,6 +1416,8 @@ class _SelectableRecordCard extends StatelessWidget {
     required this.subtitle,
     required this.timestamp,
     required this.onTap,
+    required this.recordType,
+    required this.recordTypeColor,
     this.trailing,
   });
 
@@ -1332,6 +1428,8 @@ class _SelectableRecordCard extends StatelessWidget {
   final String subtitle;
   final String timestamp;
   final VoidCallback? onTap;
+  final String recordType;
+  final Color recordTypeColor;
   final Widget? trailing;
 
   @override
@@ -1375,6 +1473,28 @@ class _SelectableRecordCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: recordTypeColor.withAlpha(20),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: recordTypeColor.withAlpha(90),
+                              ),
+                            ),
+                            child: Text(
+                              recordType,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: recordTypeColor,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
                           Text(
                             title,
                             maxLines: 2,
