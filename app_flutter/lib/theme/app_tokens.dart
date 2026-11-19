@@ -6,7 +6,8 @@ class AppColors {
   static bool darkMode = false;
 
   static const teal = Color(0xFF2563EB);
-  static const tealDark = Color(0xFF1E40AF);
+  static Color get tealDark =>
+      darkMode ? const Color(0xFF93C5FD) : const Color(0xFF1E40AF);
   static Color get tealSoft =>
       darkMode ? const Color(0xFF172554) : const Color(0xFFEFF6FF);
   static Color get tealMuted =>

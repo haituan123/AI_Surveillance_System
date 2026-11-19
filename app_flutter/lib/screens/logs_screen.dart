@@ -621,6 +621,35 @@ class _SecurityFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final unselectedForeground = Theme.of(context).colorScheme.onSurface;
+
+    Widget buildFilterChip({
+      required String label,
+      required IconData icon,
+      required bool selected,
+      required ValueChanged<bool> onSelected,
+      Key? key,
+    }) {
+      final foreground = selected ? Colors.white : unselectedForeground;
+      return FilterChip(
+        key: key,
+        label: Text(
+          label,
+          style: TextStyle(color: foreground, fontWeight: FontWeight.w800),
+        ),
+        avatar: Icon(icon, size: 17, color: foreground),
+        selected: selected,
+        selectedColor: AppColors.teal,
+        checkmarkColor: Colors.white,
+        showCheckmark: false,
+        side: BorderSide(
+          color: selected ? AppColors.teal : AppColors.borderStrong,
+          width: selected ? 2 : 1,
+        ),
+        onSelected: onSelected,
+      );
+    }
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.surfaceSubtle,
@@ -697,9 +726,9 @@ class _SecurityFilterBar extends StatelessWidget {
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(right: AppSpacing.sm),
-                    child: FilterChip(
-                      label: Text('All events'),
-                      avatar: const Icon(Icons.select_all, size: 17),
+                    child: buildFilterChip(
+                      label: 'All events',
+                      icon: Icons.select_all,
                       selected: selected.isEmpty,
                       onSelected: (_) => onClear(),
                     ),
@@ -707,10 +736,10 @@ class _SecurityFilterBar extends StatelessWidget {
                   ...SecurityRecordFilter.values.map(
                     (filter) => Padding(
                       padding: const EdgeInsets.only(right: AppSpacing.sm),
-                      child: FilterChip(
+                      child: buildFilterChip(
                         key: ValueKey('security-filter-${filter.name}'),
-                        label: Text(filter.label),
-                        avatar: Icon(filter.icon, size: 17),
+                        label: filter.label,
+                        icon: filter.icon,
                         selected: selected.contains(filter),
                         onSelected: (_) => onToggle(filter),
                       ),

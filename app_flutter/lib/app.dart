@@ -64,13 +64,22 @@ class _FaceSecurityAppState extends State<FaceSecurityApp> {
     final borderStrong =
         dark ? const Color(0xFF475569) : const Color(0xFFD1D5DB);
     final text = dark ? const Color(0xFFF8FAFC) : const Color(0xFF111827);
+    final primaryForeground =
+        dark ? const Color(0xFF93C5FD) : const Color(0xFF1E40AF);
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.teal,
+      brightness: brightness,
+      surface: surface,
+    );
+    final textTheme = ThemeData(
+      brightness: brightness,
+      useMaterial3: true,
+    ).textTheme.apply(bodyColor: text, displayColor: text);
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.teal,
-        brightness: brightness,
-        surface: surface,
-      ),
+      colorScheme: colorScheme,
+      textTheme: textTheme,
+      primaryTextTheme: textTheme,
       scaffoldBackgroundColor: background,
       appBarTheme: AppBarTheme(
         backgroundColor: background,
@@ -93,11 +102,16 @@ class _FaceSecurityAppState extends State<FaceSecurityApp> {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: surface,
+        selectedColor: dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
         side: BorderSide(color: border),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.sm),
         ),
-        labelStyle: TextStyle(fontWeight: FontWeight.w700),
+        labelStyle: TextStyle(color: text, fontWeight: FontWeight.w700),
+        secondaryLabelStyle: TextStyle(
+          color: text,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -111,9 +125,9 @@ class _FaceSecurityAppState extends State<FaceSecurityApp> {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.tealDark,
+          foregroundColor: primaryForeground,
           minimumSize: const Size(44, 44),
-          side: BorderSide(color: AppColors.borderStrong),
+          side: BorderSide(color: borderStrong),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.sm),
           ),
