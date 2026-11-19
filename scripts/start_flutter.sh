@@ -2,7 +2,12 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-device="${FLUTTER_DEVICE:-macos}"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  default_device="macos"
+else
+  default_device="chrome"
+fi
+device="${FLUTTER_DEVICE:-$default_device}"
 backend_url="${BACKEND_URL:-http://127.0.0.1:8000}"
 
 cd "$project_root/app_flutter"

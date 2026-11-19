@@ -89,6 +89,10 @@ Expected response:
 | GET | `/members` | List registered members |
 | GET | `/members/{id}` | Get a member and saved face images |
 | DELETE | `/members/{id}` | Delete a member and associated local files |
+| POST | `/zones` | Create a restricted zone for a camera |
+| GET | `/zones` | List restricted zones, optionally by camera |
+| PATCH | `/zones/{id}` | Rename or activate/deactivate a zone |
+| DELETE | `/zones/{id}` | Delete a zone |
 | POST | `/cameras` | Create a camera configuration |
 | GET | `/cameras` | List active cameras |
 | GET | `/cameras/{id}` | Get one camera configuration |
@@ -103,16 +107,32 @@ Expected response:
 | GET | `/surveillance/frame` | Get the latest annotated JPEG frame |
 | GET | `/logs` | List persistent live detection logs |
 | GET | `/logs/latest` | Get the latest persistent live log |
+| GET | `/logs/security-events` | List persistent incidents indexed by Investigations |
+| DELETE | `/logs/{id}` | Delete one persistent live detection |
+| DELETE | `/logs/all` | Delete all persistent live detections |
 | GET | `/alerts` | List persistent live alerts |
 | GET | `/alerts/latest` | Get the latest persistent live alert |
 | GET | `/alerts/{id}` | Get one alert |
 | PATCH | `/alerts/{id}/read` | Mark an alert read or unread |
 | GET | `/alerts/{id}/snapshot` | Return the saved alert JPEG |
+| DELETE | `/alerts/{id}` | Delete one live alert |
+| DELETE | `/alerts/all` | Delete all live alerts |
 | POST | `/video-analysis` | Submit a temporary uploaded-video job |
 | GET | `/video-analysis/{job_id}/status` | Get progress and processing state |
 | GET | `/video-analysis/{job_id}/results` | Get temporary partial/final events |
 | GET | `/video-analysis/{job_id}/frame` | Get the latest annotated temporary frame |
 | DELETE | `/video-analysis/{job_id}` | Cancel/delete a temporary job |
+| POST | `/qa/conversations` | Create an Investigation conversation |
+| GET | `/qa/conversations` | List Investigation conversations |
+| GET | `/qa/conversations/{id}` | Get messages, videos, and evidence |
+| DELETE | `/qa/conversations/{id}` | Delete a conversation and its related data |
+| POST | `/qa/conversations/{id}/videos` | Upload and index an Investigation video |
+| GET | `/qa/conversations/{id}/videos` | List the conversation's indexed videos |
+| GET | `/qa/videos/{video_id}/status` | Get Investigation video indexing status |
+| GET | `/qa/videos/{video_id}/content` | Stream an Investigation source video |
+| DELETE | `/qa/videos/{video_id}` | Delete an Investigation video and indexed data |
+| POST | `/qa/videos/{video_id}/retry` | Retry failed video indexing |
+| POST | `/qa/ask` | Ask a question over selected indexed videos |
 
 The member routes intentionally preserve the contract used by the Flutter
 application. They must not be renamed to `/enroll/`.
@@ -178,7 +198,9 @@ analysis never inserts rows into `surveillance_sessions`, `detection_logs`, or
 
 ## Database persistence boundary
 
-SQLite schema version 2 contains:
+SQLite schema version 7 contains the live-monitoring tables below plus the
+Investigation conversation, video-index, message, evidence, and security-event
+tables:
 
 | Table | Purpose |
 |---|---|
@@ -189,10 +211,19 @@ SQLite schema version 2 contains:
 | `detection_logs` | Persistent events produced by live surveillance |
 | `alerts` | Persistent live alerts and snapshot references |
 | `zones` | Camera-specific restricted-area polygons |
+| `qa_conversations` | Investigation conversations |
+| `qa_uploaded_videos` | Persistent Investigation source-video metadata and indexing status |
+| `video_frames` | Indexed Investigation frame metadata |
+| `detected_entities` | Entities detected in indexed Investigation frames |
+| `danger_threats` | Threat metadata extracted from indexed videos |
+| `security_events` | Persistent Investigation incidents shown in Activity |
+| `qa_messages` | Investigation questions and answers |
+| `qa_evidences` | Timestamped evidence linked to answers and source videos |
 
-Uploaded-video analysis is intentionally non-persistent. It has no job, video,
-session, detection, or alert table. Uploaded files and analysis results stay
-in temporary storage only.
+Quick video scan is intentionally non-persistent. It has no job, video,
+session, detection, or alert table. Its uploaded files and analysis results
+stay in temporary storage only. Investigation uploads use the separate
+persistent Q&A/indexing tables listed above.
 
 ## Shared AI engine
 

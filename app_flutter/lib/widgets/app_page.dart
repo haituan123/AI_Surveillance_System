@@ -32,8 +32,7 @@ class AppPage extends StatelessWidget {
             AppSpacing.xxl,
           ),
           child: Align(
-            alignment:
-                alignment ??
+            alignment: alignment ??
                 (constraints.maxWidth >= AppBreakpoints.desktop
                     ? Alignment.topLeft
                     : Alignment.topCenter),

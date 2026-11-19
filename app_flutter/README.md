@@ -11,22 +11,21 @@ starting Flutter:
 flutter run -d windows --dart-define=BACKEND_URL=http://127.0.0.1:8000
 ```
 
-The Surveillance page supports two mutually exclusive modes:
+The **Monitor** page supports two mutually exclusive modes:
 
-- **Live webcam** uses a configured camera (the **Add laptop webcam** button
+- **Live monitoring** uses a configured camera (the **Add laptop webcam** button
   creates source `0`). Live sessions save meaningful detection logs, confirmed
   unknown-person alerts, and alert snapshots through the backend.
-- **Upload video** sends a local video for temporary background analysis.
+- **Quick video scan** sends one local video for temporary background analysis.
   Progress, annotated frames, and events are polled while the job exists, but
-  none of those results are written to persistent history.
+  none of those results are written to Activity or persistent history.
 
-The Dashboard and Logs pages show persistent live-mode data only. This makes it
-clear that uploaded-video results are presentation-time results rather than
-surveillance records.
+**Overview** summarizes the system. **Activity** separates persistent Live
+monitoring detections and alerts from indexed Investigation incidents.
 
-The **Video Q&A** page maintains separate conversations, uploads and indexes
-footage, and displays answers with supporting frame evidence. Answer generation
-requires `GEMINI_API_KEY` in the backend environment.
+The **Investigations** page maintains separate conversations, uploads and
+indexes footage, and displays answers with supporting frame evidence. Answer
+generation requires `GEMINI_API_KEY` in the backend environment.
 
 See the root `README.md` for full Windows/macOS setup, backend setup, model
 download, and run instructions.
@@ -40,14 +39,14 @@ running `scripts\setup.ps1` once:
 
 Quick run from this directory after the backend is already running:
 
-```bash
+```powershell
 flutter pub get
-flutter run -d windows
+flutter run -d windows --dart-define=BACKEND_URL=http://127.0.0.1:8000
 ```
 
 On macOS:
 
 ```bash
 flutter pub get
-flutter run -d macos
+flutter run -d macos --dart-define=BACKEND_URL=http://127.0.0.1:8000
 ```

@@ -12,15 +12,21 @@ import '../widgets/header_block.dart';
 import '../widgets/localized_text.dart';
 import '../widgets/status_badge.dart';
 
+typedef RegistrationImagePicker = Future<List<PlatformFile>?> Function();
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({
     super.key,
     required this.refreshToken,
     required this.onMembersChanged,
+    this.memberService = const MemberService(),
+    this.imagePicker,
   });
 
   final int refreshToken;
   final VoidCallback onMembersChanged;
+  final MemberService memberService;
+  final RegistrationImagePicker? imagePicker;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -28,7 +34,6 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _nameController = TextEditingController();
-  final MemberService _memberService = const MemberService();
 
   List<PlatformFile> _selectedImages = [];
   RegisterMemberResult? _lastResult;
@@ -59,14 +64,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _pickImages() async {
-    final FilePickerResult? result;
+    final List<PlatformFile>? files;
     try {
-      result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
-        withData: true,
-      );
+      files = widget.imagePicker != null
+          ? await widget.imagePicker!()
+          : (await FilePicker.platform.pickFiles(
+              allowMultiple: true,
+              type: FileType.custom,
+              allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+              withData: true,
+            ))
+              ?.files;
     } catch (error) {
       if (!mounted) return;
       final message = friendlyErrorMessage(error);
@@ -75,13 +83,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    if (result == null) {
-      return;
-    }
+    if (files == null) return;
+    final selectedFiles = files;
 
-    final files = result.files;
     setState(() {
-      _selectedImages = files;
+      _selectedImages = selectedFiles;
       _formError = _hasSubmitted ? _validationMessage() : null;
     });
   }
@@ -118,7 +124,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _formError = null;
     });
     try {
-      final result = await _memberService.registerMember(
+      final result = await widget.memberService.registerMember(
         name: name,
         images: _selectedImages,
       );
@@ -185,7 +191,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               enabled: !_isSubmitting,
               decoration: InputDecoration(
                 labelText: context.tr('Person name'),
-                hintText: context.tr('Enter the name used in alerts and logs'),
+                hintText: context.tr(
+                  'Enter the name used in alerts and Activity',
+                ),
                 prefixIcon: Icon(Icons.badge_outlined),
               ),
               textInputAction: TextInputAction.next,
@@ -226,7 +234,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       alignment: Alignment.topCenter,
       children: [
         const HeaderBlock(
-          title: 'Register',
+          title: 'Register a person',
           subtitle: 'Add known people using clear face images.',
           icon: Icons.person_add_alt_1,
         ),

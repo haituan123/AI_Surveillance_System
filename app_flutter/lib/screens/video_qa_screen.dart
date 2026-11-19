@@ -13,15 +13,29 @@ import '../services/qa_service.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/localized_text.dart';
 
+typedef InvestigationVideoPicker = Future<PlatformFile?> Function();
+typedef EvidenceSeekObserver = void Function(String videoId, Duration position);
+
 class VideoQAScreen extends StatefulWidget {
-  const VideoQAScreen({super.key});
+  const VideoQAScreen({
+    super.key,
+    this.service,
+    this.initializeVideoPlayers = true,
+    this.videoPicker,
+    this.onEvidenceSeek,
+  });
+
+  final QAService? service;
+  final bool initializeVideoPlayers;
+  final InvestigationVideoPicker? videoPicker;
+  final EvidenceSeekObserver? onEvidenceSeek;
 
   @override
   State<VideoQAScreen> createState() => _VideoQAScreenState();
 }
 
 class _VideoQAScreenState extends State<VideoQAScreen> {
-  final QAService _qaService = QAService();
+  late final QAService _qaService = widget.service ?? QAService();
   final TextEditingController _questionController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -120,7 +134,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         _uploadedVideos = detail.uploadedVideos;
         _videoPage = 0;
         if (!_uploadedVideos.any((video) => video.videoId == _selectedScope)) {
-          _selectedScope = 'all';
+          _selectedScope = _uploadedVideos.length == 1
+              ? _uploadedVideos.single.videoId
+              : 'all';
         }
         _loadingMessages = false;
       });
@@ -183,9 +199,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       setState(() {
         _conversations.removeWhere((c) => c.id == id);
         if (_selectedConversation?.id == id) {
-          _selectedConversation = _conversations.isNotEmpty
-              ? _conversations.first
-              : null;
+          _selectedConversation =
+              _conversations.isNotEmpty ? _conversations.first : null;
           if (_selectedConversation != null) {
             _selectConversation(_selectedConversation!);
           } else {
@@ -211,13 +226,15 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
     }
 
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['mp4', 'avi', 'mov', 'mkv', 'webm'],
-        withReadStream: true,
-      );
-
-      final file = result?.files.single;
+      final file = widget.videoPicker != null
+          ? await widget.videoPicker!()
+          : (await FilePicker.platform.pickFiles(
+              type: FileType.custom,
+              allowedExtensions: ['mp4', 'avi', 'mov', 'mkv', 'webm'],
+              withReadStream: true,
+            ))
+              ?.files
+              .single;
       if (file == null) return;
       if (file.readStream == null && file.bytes == null && file.path == null) {
         setState(() {
@@ -292,9 +309,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
         if (_selectedScope == video.videoId) {
           _selectedScope = 'all';
         }
-        final lastPage = _uploadedVideos.isEmpty
-            ? 0
-            : (_uploadedVideos.length - 1) ~/ 4;
+        final lastPage =
+            _uploadedVideos.isEmpty ? 0 : (_uploadedVideos.length - 1) ~/ 4;
         if (_videoPage > lastPage) _videoPage = lastPage;
       });
       _showSnackBar(
@@ -381,13 +397,26 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
     );
   }
 
+  Future<void> _showConversationHistorySheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.72,
+          child: _buildConversationSidebar(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final viewportWidth = MediaQuery.sizeOf(context).width;
     final isDesktop = viewportWidth >= AppBreakpoints.compact;
-    final historySidebarWidth = (viewportWidth * 0.22)
-        .clamp(280.0, 340.0)
-        .toDouble();
+    final historySidebarWidth =
+        (viewportWidth * 0.22).clamp(280.0, 340.0).toDouble();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -410,20 +439,24 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
             child: Column(
               children: [
                 _buildHeader(isDesktop),
-                _buildScopeAndPromptsBar(),
-                Divider(height: 1, color: AppColors.border),
+                if (_uploadedVideos.isNotEmpty || _errorMessage != null) ...[
+                  _buildScopeAndPromptsBar(),
+                  Divider(height: 1, color: AppColors.border),
+                ],
                 Expanded(
-                  child:
-                      MediaQuery.sizeOf(context).width >= AppBreakpoints.desktop
-                      ? _buildWideChatWorkspace()
-                      : Column(
-                          children: [
-                            _buildVideoWorkspace(),
-                            Divider(height: 1, color: AppColors.border),
-                            Expanded(child: _buildChatBody()),
-                            _buildInputBar(),
-                          ],
-                        ),
+                  child: _uploadedVideos.isEmpty
+                      ? _buildEmptyInvestigationState()
+                      : MediaQuery.sizeOf(context).width >=
+                              AppBreakpoints.desktop
+                          ? _buildWideChatWorkspace()
+                          : Column(
+                              children: [
+                                _buildVideoWorkspace(),
+                                Divider(height: 1, color: AppColors.border),
+                                Expanded(child: _buildChatBody()),
+                                _buildInputBar(),
+                              ],
+                            ),
                 ),
               ],
             ),
@@ -442,14 +475,18 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       ),
       child: Row(
         children: [
-          if (isDesktop) ...[
+          ...[
             IconButton(
-              onPressed: () => setState(() => _showHistory = !_showHistory),
+              onPressed: isDesktop
+                  ? () => setState(() => _showHistory = !_showHistory)
+                  : _showConversationHistorySheet,
               icon: Icon(
-                _showHistory ? Icons.menu_open_rounded : Icons.history_rounded,
+                isDesktop && _showHistory
+                    ? Icons.menu_open_rounded
+                    : Icons.history_rounded,
               ),
               color: AppColors.textMuted,
-              tooltip: context.tr('Lịch sử hỏi đáp'),
+              tooltip: context.tr('Conversation history'),
             ),
             const SizedBox(width: 4),
           ],
@@ -467,7 +504,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Hỏi đáp video giám sát',
+                  'Investigations',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -475,25 +512,24 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   ),
                 ),
                 Text(
-                  'Chọn video, đặt câu hỏi và kiểm tra bằng chứng theo thời gian',
+                  'Upload and index videos persistently for deeper security-event analysis and Q&A. Indexed incidents appear in Activity.',
                   style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
               ],
             ),
           ),
-          ElevatedButton.icon(
-            onPressed: _createNewConversation,
-            icon: Icon(Icons.add, size: 18),
-            label: Text('Phiên mới'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.teal,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadii.sm),
-              ),
+          if (isDesktop)
+            FilledButton.icon(
+              onPressed: _createNewConversation,
+              icon: Icon(Icons.add, size: 18),
+              label: Text('New conversation'),
+            )
+          else
+            IconButton(
+              onPressed: _createNewConversation,
+              tooltip: context.tr('New conversation'),
+              icon: const Icon(Icons.add_comment_outlined),
             ),
-          ),
         ],
       ),
     );
@@ -527,129 +563,137 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   ),
                   IconButton(
                     icon: Icon(Icons.close, size: 16, color: AppColors.danger),
+                    tooltip: context.tr('Dismiss error'),
                     onPressed: () => setState(() => _errorMessage = null),
                   ),
                 ],
               ),
             ),
-
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: _uploadingVideo ? null : _pickAndUploadVideo,
-                icon: _uploadingVideo
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add_rounded, size: 17),
-                label: Text(_uploadingVideo ? 'Đang tải...' : 'Thêm video'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.teal,
-                  side: BorderSide(color: AppColors.borderStrong),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
+          if (_uploadedVideos.isNotEmpty)
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('investigations-toolbar-add-video'),
+                  onPressed: _uploadingVideo ? null : _pickAndUploadVideo,
+                  icon: _uploadingVideo
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_rounded, size: 17),
+                  label: Text(
+                    _uploadingVideo ? 'Uploading...' : 'Add video',
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadii.sm),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.teal,
+                    side: BorderSide(color: AppColors.borderStrong),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: PopupMenuButton<String>(
-                  enabled: _uploadedVideos.isNotEmpty,
-                  onSelected: (value) => setState(() {
-                    _selectedScope = value;
-                    if (value == 'all') _videoPage = 0;
-                    if (value != 'all') _showVideoRail = true;
-                  }),
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'all',
-                      child: Row(
-                        children: [
-                          const Icon(Icons.grid_view_rounded, size: 17),
-                          const SizedBox(width: 10),
-                          Text('Tất cả video (${_uploadedVideos.length})'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    for (final video in _uploadedVideos)
+                const SizedBox(width: 10),
+                Expanded(
+                  child: PopupMenuButton<String>(
+                    enabled: _uploadedVideos.isNotEmpty,
+                    onSelected: (value) => setState(() {
+                      _selectedScope = value;
+                      if (value == 'all') _videoPage = 0;
+                      if (value != 'all') _showVideoRail = true;
+                    }),
+                    itemBuilder: (context) => [
                       PopupMenuItem(
-                        value: video.videoId,
+                        value: 'all',
                         child: Row(
                           children: [
-                            Icon(
-                              video.isCompleted
-                                  ? Icons.check_circle
-                                  : video.isFailed
-                                  ? Icons.error
-                                  : Icons.pending,
-                              size: 16,
-                              color: video.isCompleted
-                                  ? AppColors.success
-                                  : video.isFailed
-                                  ? AppColors.danger
-                                  : AppColors.warning,
-                            ),
+                            const Icon(Icons.grid_view_rounded, size: 17),
                             const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                _videoDisplayName(video),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
+                            Text('Tất cả video (${_uploadedVideos.length})'),
                           ],
                         ),
                       ),
-                  ],
-                  child: Container(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceSubtle,
-                      borderRadius: BorderRadius.circular(AppRadii.sm),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _selectedScope == 'all'
-                              ? Icons.grid_view_rounded
-                              : Icons.play_circle_outline,
-                          size: 17,
-                          color: AppColors.teal,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _scopeLabel(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                      const PopupMenuDivider(),
+                      for (final video in _uploadedVideos)
+                        PopupMenuItem(
+                          value: video.videoId,
+                          child: Row(
+                            children: [
+                              Icon(
+                                video.isCompleted
+                                    ? Icons.check_circle
+                                    : video.isFailed
+                                        ? Icons.error
+                                        : Icons.pending,
+                                size: 16,
+                                color: video.isCompleted
+                                    ? AppColors.success
+                                    : video.isFailed
+                                        ? AppColors.danger
+                                        : AppColors.warning,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _videoDisplayName(video),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const Icon(Icons.expand_more, size: 18),
-                      ],
+                    ],
+                    child: Container(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceSubtle,
+                        borderRadius: BorderRadius.circular(AppRadii.sm),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _selectedScope == 'all'
+                                ? Icons.grid_view_rounded
+                                : Icons.play_circle_outline,
+                            size: 17,
+                            color: AppColors.teal,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Scope: ${_scopeLabel()}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.expand_more, size: 18),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              IconButton(
-                onPressed: _uploadedVideos.isEmpty ? null : _showVideoLibrary,
-                icon: const Icon(Icons.video_library_outlined, size: 20),
-                tooltip: context.tr('Quản lý video'),
-              ),
-            ],
-          ),
+                const SizedBox(width: 6),
+                if (_uploadedVideos.length > 1)
+                  IconButton(
+                    key: const ValueKey('investigations-video-library'),
+                    onPressed: _showVideoLibrary,
+                    icon: const Icon(Icons.video_library_outlined, size: 20),
+                    tooltip: context.tr('Manage video library'),
+                  )
+                else
+                  _buildSingleVideoMenu(_uploadedVideos.single),
+              ],
+            ),
         ],
       ),
     );
@@ -658,10 +702,49 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
   String _scopeLabel() {
     if (_uploadedVideos.isEmpty) return 'Chưa có video';
     if (_selectedScope == 'all') {
-      return 'Hỏi trên tất cả ${_uploadedVideos.length} video';
+      return 'All videos (${_uploadedVideos.length})';
     }
     final video = _videoForId(_selectedScope);
-    return video == null ? 'Chọn video' : _videoDisplayName(video);
+    return video == null
+        ? 'Select video'
+        : 'Selected: ${_videoDisplayName(video)} • ${_videoStatusLabel(video)}';
+  }
+
+  String _videoStatusLabel(QAUploadedVideoModel video) {
+    if (video.isCompleted) return 'Ready';
+    if (video.isFailed) return 'Failed';
+    return 'Processing';
+  }
+
+  Widget _buildSingleVideoMenu(QAUploadedVideoModel video) {
+    return PopupMenuButton<String>(
+      key: const ValueKey('investigations-single-video-menu'),
+      tooltip: context.tr('Video options'),
+      icon: const Icon(Icons.more_vert),
+      onSelected: (value) {
+        if (value == 'retry') _retryUploadedVideo(video);
+        if (value == 'delete') _deleteUploadedVideo(video);
+      },
+      itemBuilder: (context) => [
+        if (video.isFailed)
+          PopupMenuItem(
+            value: 'retry',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.refresh),
+              title: Text('Retry analysis'),
+            ),
+          ),
+        PopupMenuItem(
+          value: 'delete',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.delete_outline, color: AppColors.danger),
+            title: Text('Delete video and related data'),
+          ),
+        ),
+      ],
+    );
   }
 
   String _videoDisplayName(QAUploadedVideoModel video) {
@@ -700,13 +783,13 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   video.isCompleted
                       ? Icons.check_circle
                       : video.isFailed
-                      ? Icons.error
-                      : Icons.pending,
+                          ? Icons.error
+                          : Icons.pending,
                   color: video.isCompleted
                       ? AppColors.success
                       : video.isFailed
-                      ? AppColors.danger
-                      : AppColors.warning,
+                          ? AppColors.danger
+                          : AppColors.warning,
                 ),
                 title: Text(
                   _videoDisplayName(video),
@@ -717,8 +800,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   video.isCompleted
                       ? '${video.indexedFrames} khung hình đã phân tích'
                       : video.isFailed
-                      ? 'Xử lý thất bại'
-                      : 'Đang xử lý ${video.processedFrames}/${video.totalFrames}',
+                          ? 'Xử lý thất bại'
+                          : 'Đang xử lý ${video.processedFrames}/${video.totalFrames}',
                   style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                 ),
                 trailing: Row(
@@ -781,8 +864,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
   }
 
   void _focusEvidence(QAEvidenceModel evidence) {
-    final sourceId =
-        evidence.sourceVideoId ??
+    final sourceId = evidence.sourceVideoId ??
         (_selectedScope == 'all' ? null : _selectedScope);
     final source = _videoForId(sourceId);
     if (source == null) {
@@ -793,49 +875,17 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       _selectedScope = source.videoId;
       _showVideoRail = true;
     });
+    final position =
+        Duration(milliseconds: (evidence.startTimestamp * 1000).round());
+    widget.onEvidenceSeek?.call(source.videoId, position);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _videoKey(source.videoId).currentState?.seekTo(
-        Duration(milliseconds: (evidence.startTimestamp * 1000).round()),
-      );
+      _videoKey(source.videoId).currentState?.seekTo(position);
     });
   }
 
   Widget _buildVideoWorkspace() {
     if (_uploadedVideos.isEmpty) {
-      return Container(
-        height: 138,
-        width: double.infinity,
-        color: AppColors.surfaceSubtle,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.video_library_outlined,
-                color: AppColors.textSubtle,
-                size: 34,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Tải video lên để xem và đặt câu hỏi',
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _uploadingVideo ? null : _pickAndUploadVideo,
-                icon: Icon(Icons.upload_file, size: 16),
-                label: Text('Chọn video'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.teal,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildEmptyInvestigationState();
     }
 
     final selectedVideo = _videoForId(_selectedScope);
@@ -856,12 +906,26 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
             allMode && visibleVideos.length > 1 && constraints.maxWidth < 720;
         final columns = useTwoColumns ? 2 : 1;
         final rows = (visibleVideos.length / columns).ceil();
-        final tileHeight = useTwoColumns ? 190.0 : 290.0;
-        final contentHeight = useCarousel
-            ? 240.0
-            : rows * tileHeight + (rows - 1) * 8;
+        final compactViewport = MediaQuery.sizeOf(context).width < 720;
+        final tileHeight = useTwoColumns
+            ? 190.0
+            : compactViewport
+                ? 210.0
+                : 290.0;
+        final contentHeight =
+            useCarousel ? 240.0 : rows * tileHeight + (rows - 1) * 8;
 
         Widget playerCard(QAUploadedVideoModel video) {
+          if (!widget.initializeVideoPlayers) {
+            return _InvestigationVideoPlaceholder(
+              video: video,
+              displayName: _videoDisplayName(video),
+              isQueryTarget: !allMode,
+              onSelectForQuery: () {
+                setState(() => _selectedScope = video.videoId);
+              },
+            );
+          }
           return _QAVideoPlayerCard(
             key: _videoKey(video.videoId),
             video: video,
@@ -905,6 +969,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   if (allMode && pageCount > 1) ...[
                     IconButton(
                       visualDensity: VisualDensity.compact,
+                      tooltip: context.tr('Previous videos'),
                       onPressed: currentPage == 0
                           ? null
                           : () => setState(() => _videoPage = currentPage - 1),
@@ -920,6 +985,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                     ),
                     IconButton(
                       visualDensity: VisualDensity.compact,
+                      tooltip: context.tr('Next videos'),
                       onPressed: currentPage >= pageCount - 1
                           ? null
                           : () => setState(() => _videoPage = currentPage + 1),
@@ -982,7 +1048,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
     const collapsedWidth = 52.0;
     final selectedVideo = _videoForId(_selectedScope);
     final videos = <QAUploadedVideoModel>[
-      ?selectedVideo,
+      // ignore: use_null_aware_elements, formatter compatibility
+      if (selectedVideo != null) selectedVideo,
       ..._uploadedVideos.where(
         (video) => video.videoId != selectedVideo?.videoId,
       ),
@@ -1043,7 +1110,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                     ),
                     Expanded(
                       child: videos.isEmpty
-                          ? _buildEmptyVideoRail()
+                          ? const SizedBox.shrink()
                           : ListView.separated(
                               padding: const EdgeInsets.all(10),
                               itemCount: videos.length,
@@ -1053,19 +1120,32 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                                 final video = videos[index];
                                 return SizedBox(
                                   height: 200,
-                                  child: _QAVideoPlayerCard(
-                                    key: _videoKey(video.videoId),
-                                    video: video,
-                                    displayName: _videoDisplayName(video),
-                                    contentUrl: _qaService.videoContentUrl(
-                                      video.videoId,
-                                    ),
-                                    isQueryTarget:
-                                        _selectedScope == video.videoId,
-                                    onSelectForQuery: () => setState(
-                                      () => _selectedScope = video.videoId,
-                                    ),
-                                  ),
+                                  child: widget.initializeVideoPlayers
+                                      ? _QAVideoPlayerCard(
+                                          key: _videoKey(video.videoId),
+                                          video: video,
+                                          displayName: _videoDisplayName(video),
+                                          contentUrl:
+                                              _qaService.videoContentUrl(
+                                            video.videoId,
+                                          ),
+                                          isQueryTarget:
+                                              _selectedScope == video.videoId,
+                                          onSelectForQuery: () => setState(
+                                            () =>
+                                                _selectedScope = video.videoId,
+                                          ),
+                                        )
+                                      : _InvestigationVideoPlaceholder(
+                                          video: video,
+                                          displayName: _videoDisplayName(video),
+                                          isQueryTarget:
+                                              _selectedScope == video.videoId,
+                                          onSelectForQuery: () => setState(
+                                            () =>
+                                                _selectedScope = video.videoId,
+                                          ),
+                                        ),
                                 );
                               },
                             ),
@@ -1096,33 +1176,63 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
     );
   }
 
-  Widget _buildEmptyVideoRail() {
+  Widget _buildEmptyInvestigationState() {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.video_library_outlined,
-              color: AppColors.textSubtle,
-              size: 34,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Chưa có video',
-              style: TextStyle(
-                color: AppColors.text,
-                fontWeight: FontWeight.w700,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.tealSoft,
+                      borderRadius: BorderRadius.circular(AppRadii.md),
+                    ),
+                    child: Icon(
+                      Icons.video_library_outlined,
+                      color: AppColors.teal,
+                      size: 36,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'Add your first investigation video',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: AppColors.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'The video will be indexed for persistent security analysis, questions, and timestamped evidence.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  FilledButton.icon(
+                    key: const ValueKey('investigations-empty-add-video'),
+                    onPressed: _uploadingVideo ? null : _pickAndUploadVideo,
+                    icon: _uploadingVideo
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add_rounded),
+                    label: Text(_uploadingVideo ? 'Uploading...' : 'Add video'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _uploadingVideo ? null : _pickAndUploadVideo,
-              icon: const Icon(Icons.add_rounded, size: 17),
-              label: Text(_uploadingVideo ? 'Đang tải...' : 'Thêm video'),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1170,10 +1280,9 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                   itemBuilder: (context, index) {
                     final conv = _conversations[index];
                     final isSelected = conv.id == _selectedConversation?.id;
-                    return Container(
-                      color: isSelected
-                          ? AppColors.tealSoft
-                          : Colors.transparent,
+                    return Material(
+                      color:
+                          isSelected ? AppColors.tealSoft : Colors.transparent,
                       child: ListTile(
                         dense: true,
                         contentPadding: const EdgeInsets.only(
@@ -1186,9 +1295,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                         leading: Icon(
                           Icons.chat_bubble_outline,
                           size: 18,
-                          color: isSelected
-                              ? AppColors.teal
-                              : AppColors.textMuted,
+                          color:
+                              isSelected ? AppColors.teal : AppColors.textMuted,
                         ),
                         title: Text(
                           conv.title,
@@ -1213,8 +1321,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                         ),
                         trailing: IconButton(
                           constraints: const BoxConstraints.tightFor(
-                            width: 36,
-                            height: 36,
+                            width: 48,
+                            height: 48,
                           ),
                           padding: EdgeInsets.zero,
                           icon: Icon(
@@ -1252,7 +1360,7 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Bắt đầu đặt câu hỏi về dữ liệu camera giám sát',
+              'Start asking questions about indexed investigation videos',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -1370,56 +1478,62 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                       data: Theme.of(
                         context,
                       ).copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        tilePadding: EdgeInsets.zero,
-                        title: Row(
-                          children: [
-                            Icon(
-                              Icons.translate,
-                              size: 14,
-                              color: AppColors.teal,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'Chi tiết kỹ thuật',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: ExpansionTile(
+                          key: ValueKey('technical-details-${msg.id}'),
+                          tilePadding: EdgeInsets.zero,
+                          title: Row(
+                            children: [
+                              Icon(
+                                Icons.translate,
+                                size: 14,
                                 color: AppColors.teal,
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'Technical details',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.teal,
+                                ),
+                              ),
+                            ],
+                          ),
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceSubtle,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadii.sm,
+                                ),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Query EN: "${msg.translatedQueryEn}"',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Reasoning: ${msg.reasoningEn}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceSubtle,
-                              borderRadius: BorderRadius.circular(AppRadii.sm),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Query EN: "${msg.translatedQueryEn}"',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Reasoning: ${msg.reasoningEn}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textMuted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                   ],
@@ -1489,9 +1603,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
               runSpacing: 10,
               children: results.map((result) {
                 final negative = _looksLikeNegativeResult(result.value);
-                final statusColor = negative
-                    ? AppColors.textMuted
-                    : AppColors.success;
+                final statusColor =
+                    negative ? AppColors.textMuted : AppColors.success;
                 return Container(
                   width: cardWidth,
                   padding: const EdgeInsets.all(12),
@@ -1586,18 +1699,18 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
   }
 
   String _evidenceEventLabel(String value) => switch (value) {
-    'fighting' || 'violence' => 'Fighting / violence',
-    'fire_smoke' => 'Fire / smoke',
-    'shooting' => 'Shooting',
-    'weapon_drawn' || 'weapon_present' => 'Weapon detected',
-    'knife_threat' || 'knife_present' => 'Knife / sharp weapon',
-    'robbery_motorbike' => 'Motorbike robbery',
-    'robbery_backpack' => 'Backpack robbery',
-    'robbery_phone' => 'Phone robbery',
-    'theft' || 'possible_theft' => 'Possible theft',
-    'person_presence' || 'known_identity' => 'Person detected',
-    _ => value.replaceAll('_', ' '),
-  };
+        'fighting' || 'violence' => 'Fighting / violence',
+        'fire_smoke' => 'Fire / smoke',
+        'shooting' => 'Shooting',
+        'weapon_drawn' || 'weapon_present' => 'Weapon detected',
+        'knife_threat' || 'knife_present' => 'Knife / sharp weapon',
+        'robbery_motorbike' => 'Motorbike robbery',
+        'robbery_backpack' => 'Backpack robbery',
+        'robbery_phone' => 'Phone robbery',
+        'theft' || 'possible_theft' => 'Possible theft',
+        'person_presence' || 'known_identity' => 'Person detected',
+        _ => value.replaceAll('_', ' '),
+      };
 
   Color _evidenceEventColor(String value) {
     if (const {
@@ -1621,42 +1734,43 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
   }
 
   IconData _evidenceObjectIcon(String value) => switch (value.toLowerCase()) {
-    'fire' || 'smoke' => Icons.local_fire_department,
-    'motorcycle' || 'motorbike' || 'scooter' => Icons.two_wheeler,
-    'bicycle' || 'bike' => Icons.pedal_bike,
-    'person' => Icons.person,
-    'knife' ||
-    'scissors' ||
-    'dagger' ||
-    'machete' => Icons.warning_amber_rounded,
-    'gun' || 'pistol' || 'rifle' || 'weapon' => Icons.dangerous,
-    'phone' || 'cell phone' => Icons.phone_android,
-    'backpack' || 'bag' || 'handbag' => Icons.backpack,
-    _ => Icons.label_outline,
-  };
+        'fire' || 'smoke' => Icons.local_fire_department,
+        'motorcycle' || 'motorbike' || 'scooter' => Icons.two_wheeler,
+        'bicycle' || 'bike' => Icons.pedal_bike,
+        'person' => Icons.person,
+        'knife' ||
+        'scissors' ||
+        'dagger' ||
+        'machete' =>
+          Icons.warning_amber_rounded,
+        'gun' || 'pistol' || 'rifle' || 'weapon' => Icons.dangerous,
+        'phone' || 'cell phone' => Icons.phone_android,
+        'backpack' || 'bag' || 'handbag' => Icons.backpack,
+        _ => Icons.label_outline,
+      };
 
   String _evidenceObjectLabel(String value) => switch (value.toLowerCase()) {
-    'fire' => 'Fire',
-    'smoke' => 'Smoke',
-    'motorcycle' || 'motorbike' || 'scooter' => 'Motorbike',
-    'bicycle' || 'bike' => 'Bicycle',
-    'person' => 'Person',
-    'knife' || 'scissors' || 'dagger' || 'machete' => 'Knife',
-    'gun' || 'pistol' || 'rifle' || 'weapon' => 'Weapon',
-    'phone' || 'cell phone' => 'Phone',
-    'backpack' || 'bag' || 'handbag' => 'Backpack',
-    _ => value.replaceAll('_', ' '),
-  };
+        'fire' => 'Fire',
+        'smoke' => 'Smoke',
+        'motorcycle' || 'motorbike' || 'scooter' => 'Motorbike',
+        'bicycle' || 'bike' => 'Bicycle',
+        'person' => 'Person',
+        'knife' || 'scissors' || 'dagger' || 'machete' => 'Knife',
+        'gun' || 'pistol' || 'rifle' || 'weapon' => 'Weapon',
+        'phone' || 'cell phone' => 'Phone',
+        'backpack' || 'bag' || 'handbag' => 'Backpack',
+        _ => value.replaceAll('_', ' '),
+      };
 
   Widget _buildEvidenceBadges(QAEvidenceModel evidence) {
     final confidence = evidence.confidence;
     final confidenceColor = confidence == null
         ? AppColors.textMuted
         : confidence >= 0.80
-        ? AppColors.success
-        : confidence >= 0.50
-        ? AppColors.warning
-        : AppColors.danger;
+            ? AppColors.success
+            : confidence >= 0.50
+                ? AppColors.warning
+                : AppColors.danger;
     return Wrap(
       spacing: 6,
       runSpacing: 6,
@@ -1686,9 +1800,8 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
   Widget _buildEvidenceCard(QAEvidenceModel ev) {
     final hasImage = ev.snapshotPath.isNotEmpty;
     final sourceVideo = _videoForId(ev.sourceVideoId);
-    final imageUrl = hasImage
-        ? '${ApiConfig.baseUrl}/qa/evidences/${ev.id}/snapshot'
-        : '';
+    final imageUrl =
+        hasImage ? '${ApiConfig.baseUrl}/qa/evidences/${ev.id}/snapshot' : '';
 
     return Material(
       color: Colors.transparent,
@@ -1805,12 +1918,16 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
                     color: AppColors.teal,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    'Mở video tại ${ev.formattedTimeRange}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.teal,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Text(
+                      'Mở video tại ${ev.formattedTimeRange}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.teal,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -1839,21 +1956,6 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.filter_alt_outlined, size: 14, color: AppColors.teal),
-              const SizedBox(width: 5),
-              Text(
-                'Phạm vi: ${_scopeLabel()}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textMuted,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
           Row(
             children: [
               Expanded(
@@ -1891,26 +1993,29 @@ class _VideoQAScreenState extends State<VideoQAScreen> {
               SizedBox(
                 height: 46,
                 width: 46,
-                child: ElevatedButton(
-                  onPressed: _sending ? null : () => _handleSend(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.teal,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadii.md),
+                child: Tooltip(
+                  message: context.tr('Ask question'),
+                  child: ElevatedButton(
+                    onPressed: _sending ? null : () => _handleSend(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.teal,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.md),
+                      ),
                     ),
+                    child: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.arrow_upward_rounded, size: 21),
                   ),
-                  child: _sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.arrow_upward_rounded, size: 21),
                 ),
               ),
             ],
@@ -1994,6 +2099,81 @@ class _EvidenceBadge extends StatelessWidget {
   }
 }
 
+class _InvestigationVideoPlaceholder extends StatelessWidget {
+  const _InvestigationVideoPlaceholder({
+    required this.video,
+    required this.displayName,
+    required this.isQueryTarget,
+    required this.onSelectForQuery,
+  });
+
+  final QAUploadedVideoModel video;
+  final String displayName;
+  final bool isQueryTarget;
+  final VoidCallback onSelectForQuery;
+
+  String get _status {
+    if (video.isCompleted) return 'Ready';
+    if (video.isFailed) return 'Failed';
+    return 'Processing';
+  }
+
+  Color get _statusColor => video.isCompleted
+      ? AppColors.success
+      : video.isFailed
+          ? AppColors.danger
+          : AppColors.warning;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.cameraCanvas,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+        border: Border.all(
+          color: isQueryTarget ? AppColors.teal : AppColors.borderStrong,
+          width: isQueryTarget ? 2 : 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.video_file_outlined, color: Colors.white70, size: 36),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              _status,
+              style: TextStyle(
+                color: _statusColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (!isQueryTarget) ...[
+              const SizedBox(height: AppSpacing.sm),
+              TextButton(
+                onPressed: onSelectForQuery,
+                child: Text('Use this video'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _QAVideoPlayerCard extends StatefulWidget {
   const _QAVideoPlayerCard({
     super.key,
@@ -2058,8 +2238,8 @@ class _QAVideoPlayerCardState extends State<_QAVideoPlayerCard> {
     final statusColor = widget.video.isCompleted
         ? AppColors.success
         : widget.video.isFailed
-        ? AppColors.danger
-        : AppColors.warning;
+            ? AppColors.danger
+            : AppColors.warning;
 
     return DecoratedBox(
       decoration: BoxDecoration(

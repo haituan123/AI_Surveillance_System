@@ -21,6 +21,8 @@ class DashboardScreen extends StatefulWidget {
     this.securityService,
     this.memberService = const MemberService(),
     this.onStartSurveillance,
+    this.onQuickVideoScan,
+    this.onStartInvestigation,
     this.onRegisterPerson,
     this.onViewLogs,
   });
@@ -28,6 +30,8 @@ class DashboardScreen extends StatefulWidget {
   final SecurityService? securityService;
   final MemberService memberService;
   final VoidCallback? onStartSurveillance;
+  final VoidCallback? onQuickVideoScan;
+  final VoidCallback? onStartInvestigation;
   final VoidCallback? onRegisterPerson;
   final VoidCallback? onViewLogs;
 
@@ -101,14 +105,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final running = _status?.running == true;
+    final showFirstUseGuide = _memberCount == 0 && _latest == null;
 
     return AppPage(
       maxWidth: AppLayout.dataMaxWidth,
       children: [
         HeaderBlock(
-          title: 'Operational Overview',
+          title: 'Overview',
           subtitle:
-              'Monitor backend health, camera activity, recognition coverage, and recent alert activity.',
+              'Review system health, live monitoring, recognition coverage, and recent security activity.',
           icon: Icons.security,
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -116,7 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           AppMessagePanel(
             title: 'Backend offline',
             message:
-                'Live status, members, alerts, and logs could not be refreshed. Check the backend server and connection.',
+                'Live status, members, alerts, and activity could not be refreshed. Check the backend server and connection.',
             tone: AppMessageTone.danger,
             action: OutlinedButton.icon(
               onPressed: _refresh,
@@ -170,6 +175,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           },
         ),
         const SizedBox(height: AppSpacing.xl),
+        _QuickActionsPanel(
+          showFirstUseGuide: showFirstUseGuide,
+          onRegisterPerson: widget.onRegisterPerson,
+          onStartLiveMonitoring: widget.onStartSurveillance,
+          onQuickVideoScan: widget.onQuickVideoScan,
+          onStartInvestigation: widget.onStartInvestigation,
+          onViewActivity: widget.onViewLogs,
+        ),
+        const SizedBox(height: AppSpacing.xl),
         LayoutBuilder(
           builder: (context, constraints) {
             final isDesktop = constraints.maxWidth >= AppBreakpoints.desktop;
@@ -205,6 +219,184 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+class _QuickActionsPanel extends StatelessWidget {
+  const _QuickActionsPanel({
+    required this.showFirstUseGuide,
+    required this.onRegisterPerson,
+    required this.onStartLiveMonitoring,
+    required this.onQuickVideoScan,
+    required this.onStartInvestigation,
+    required this.onViewActivity,
+  });
+
+  final bool showFirstUseGuide;
+  final VoidCallback? onRegisterPerson;
+  final VoidCallback? onStartLiveMonitoring;
+  final VoidCallback? onQuickVideoScan;
+  final VoidCallback? onStartInvestigation;
+  final VoidCallback? onViewActivity;
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = [
+      (
+        key: const ValueKey('overview-register-action'),
+        label: 'Register a person',
+        icon: Icons.person_add_alt_1_outlined,
+        onPressed: onRegisterPerson,
+      ),
+      (
+        key: const ValueKey('overview-live-monitoring-action'),
+        label: 'Start live monitoring',
+        icon: Icons.videocam_outlined,
+        onPressed: onStartLiveMonitoring,
+      ),
+      (
+        key: const ValueKey('overview-quick-scan-action'),
+        label: 'Run a quick video scan',
+        icon: Icons.video_file_outlined,
+        onPressed: onQuickVideoScan,
+      ),
+      (
+        key: const ValueKey('overview-investigation-action'),
+        label: 'Start a video investigation',
+        icon: Icons.psychology_outlined,
+        onPressed: onStartInvestigation,
+      ),
+      (
+        key: const ValueKey('overview-activity-action'),
+        label: 'View activity',
+        icon: Icons.receipt_long_outlined,
+        onPressed: onViewActivity,
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionHeader(title: 'Quick actions'),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: actions
+                      .map(
+                        (action) => OutlinedButton.icon(
+                          key: action.key,
+                          onPressed: action.onPressed,
+                          icon: Icon(action.icon),
+                          label: Text(action.label),
+                        ),
+                      )
+                      .toList(),
+                ),
+                if (showFirstUseGuide) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Divider(height: 1, color: AppColors.border),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Get started in three steps',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      const steps = [
+                        'Register people.',
+                        'Start live monitoring or scan a video.',
+                        'Review Activity or investigate footage.',
+                      ];
+                      if (constraints.maxWidth < AppBreakpoints.compact) {
+                        return Column(
+                          children: steps.indexed
+                              .map(
+                                (entry) => Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.sm,
+                                  ),
+                                  child: _FirstUseStep(
+                                    number: entry.$1 + 1,
+                                    label: entry.$2,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: steps.indexed
+                            .map(
+                              (entry) => Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    right: entry.$1 == steps.length - 1
+                                        ? 0
+                                        : AppSpacing.md,
+                                  ),
+                                  child: _FirstUseStep(
+                                    number: entry.$1 + 1,
+                                    label: entry.$2,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FirstUseStep extends StatelessWidget {
+  const _FirstUseStep({required this.number, required this.label});
+
+  final int number;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 12,
+          backgroundColor: AppColors.tealSoft,
+          foregroundColor: AppColors.tealDark,
+          child: Text(
+            '$number',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.textMuted),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RecentAlertsPanel extends StatelessWidget {
   const _RecentAlertsPanel({required this.alerts, required this.onViewLogs});
 
@@ -221,19 +413,20 @@ class _RecentAlertsPanel extends StatelessWidget {
           trailing: TextButton.icon(
             onPressed: onViewLogs,
             icon: Icon(Icons.open_in_new),
-            label: Text('View logs'),
+            label: Text('View activity'),
           ),
         ),
         if (alerts.isEmpty)
           EmptyPanel(
             icon: Icons.notifications_none,
             title: 'No recent alerts',
-            message: 'Unknown-person alerts from live mode will appear here.',
+            message:
+                'Saved unknown-person alerts from Live monitoring will appear here.',
             compact: true,
             action: OutlinedButton.icon(
               onPressed: onViewLogs,
               icon: Icon(Icons.receipt_long_outlined),
-              label: Text('Open logs'),
+              label: Text('Open activity'),
             ),
           )
         else
@@ -310,7 +503,7 @@ class _LatestDetectionPanel extends StatelessWidget {
             icon: Icons.fact_check_outlined,
             title: 'No persistent live detection yet',
             message:
-                'Uploaded-video results are temporary and do not appear here.',
+                'Quick video scan results are temporary and do not appear in Overview or Activity.',
             compact: true,
           )
         else

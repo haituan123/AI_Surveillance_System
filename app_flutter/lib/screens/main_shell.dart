@@ -7,8 +7,7 @@ import '../widgets/localized_text.dart';
 import '../widgets/settings_panel.dart';
 import 'dashboard_screen.dart';
 import 'logs_screen.dart';
-import 'members_screen.dart';
-import 'register_screen.dart';
+import 'people_screen.dart';
 import 'surveillance_screen.dart';
 import 'video_qa_screen.dart';
 
@@ -22,64 +21,70 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
   int _membersRefreshToken = 0;
+  int _peopleNavigationRequest = 0;
+  PeopleSection _peopleInitialSection = PeopleSection.registeredPeople;
+  int _monitorNavigationRequest = 0;
+  SurveillanceInitialMode _monitorInitialMode =
+      SurveillanceInitialMode.liveMonitoring;
   bool _sidebarExpanded = true;
 
   List<_NavPage> get _pages => [
-    _NavPage(
-      title: 'Dashboard',
-      icon: Icons.dashboard_outlined,
-      selectedIcon: Icons.dashboard,
-      child: DashboardScreen(
-        onStartSurveillance: () => _selectPage(3),
-        onRegisterPerson: () => _selectPage(2),
-        onViewLogs: () => _selectPage(5),
-      ),
-    ),
-    _NavPage(
-      title: 'Members',
-      icon: Icons.people_alt_outlined,
-      selectedIcon: Icons.people_alt,
-      child: MembersScreen(
-        refreshToken: _membersRefreshToken,
-        onMembersChanged: _notifyMembersChanged,
-      ),
-    ),
-    _NavPage(
-      title: 'Register',
-      icon: Icons.person_add_alt_1_outlined,
-      selectedIcon: Icons.person_add_alt_1,
-      child: RegisterScreen(
-        refreshToken: _membersRefreshToken,
-        onMembersChanged: _notifyMembersChanged,
-      ),
-    ),
-    const _NavPage(
-      title: 'Surveillance',
-      icon: Icons.videocam_outlined,
-      selectedIcon: Icons.videocam,
-      child: SurveillanceScreen(),
-    ),
-    const _NavPage(
-      title: 'Video QA',
-      icon: Icons.psychology_outlined,
-      selectedIcon: Icons.psychology,
-      child: VideoQAScreen(),
-    ),
-    const _NavPage(
-      title: 'Logs',
-      icon: Icons.receipt_long_outlined,
-      selectedIcon: Icons.receipt_long,
-      child: LogsScreen(),
-    ),
-  ];
+        _NavPage(
+          title: 'Overview',
+          icon: Icons.dashboard_outlined,
+          selectedIcon: Icons.dashboard,
+          child: DashboardScreen(
+            onStartSurveillance: () =>
+                _openMonitor(SurveillanceInitialMode.liveMonitoring),
+            onQuickVideoScan: () =>
+                _openMonitor(SurveillanceInitialMode.quickVideoScan),
+            onStartInvestigation: () => _selectPage(3),
+            onRegisterPerson: () => _openPeople(PeopleSection.registerPerson),
+            onViewLogs: () => _selectPage(4),
+          ),
+        ),
+        _NavPage(
+          title: 'People',
+          icon: Icons.people_alt_outlined,
+          selectedIcon: Icons.people_alt,
+          child: PeopleScreen(
+            refreshToken: _membersRefreshToken,
+            onMembersChanged: _notifyMembersChanged,
+            initialSection: _peopleInitialSection,
+            navigationRequest: _peopleNavigationRequest,
+          ),
+        ),
+        _NavPage(
+          title: 'Monitor',
+          icon: Icons.videocam_outlined,
+          selectedIcon: Icons.videocam,
+          child: SurveillanceScreen(
+            initialMode: _monitorInitialMode,
+            navigationRequest: _monitorNavigationRequest,
+          ),
+        ),
+        const _NavPage(
+          title: 'Investigations',
+          icon: Icons.psychology_outlined,
+          selectedIcon: Icons.psychology,
+          child: VideoQAScreen(),
+        ),
+        const _NavPage(
+          title: 'Activity',
+          icon: Icons.receipt_long_outlined,
+          selectedIcon: Icons.receipt_long,
+          child: LogsScreen(),
+        ),
+      ];
 
   void _selectPage(int index) {
     setState(() {
-      _selectedIndex = index;
-      final selectedTitle = _pages[index].title;
-      if (selectedTitle == 'Members' || selectedTitle == 'Register') {
+      if (index == 1) {
+        _peopleInitialSection = PeopleSection.registeredPeople;
+        _peopleNavigationRequest++;
         _membersRefreshToken++;
       }
+      _selectedIndex = index;
     });
   }
 
@@ -87,11 +92,28 @@ class _MainShellState extends State<MainShell> {
     setState(() => _membersRefreshToken++);
   }
 
+  void _openPeople(PeopleSection initialSection) {
+    setState(() {
+      _peopleInitialSection = initialSection;
+      _peopleNavigationRequest++;
+      _selectedIndex = 1;
+    });
+  }
+
+  void _openMonitor(SurveillanceInitialMode initialMode) {
+    setState(() {
+      _monitorInitialMode = initialMode;
+      _monitorNavigationRequest++;
+      _selectedIndex = 2;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final page = _pages[_selectedIndex];
-    final useSidebar =
-        MediaQuery.sizeOf(context).width >= AppBreakpoints.desktop;
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final useSidebar = viewportWidth >= AppBreakpoints.desktop;
+    final compactNavigation = viewportWidth < AppBreakpoints.compact;
     final body = SafeArea(
       child: IndexedStack(
         index: _selectedIndex,
@@ -130,18 +152,37 @@ class _MainShellState extends State<MainShell> {
           : body,
       bottomNavigationBar: useSidebar
           ? null
-          : NavigationBar(
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: _selectPage,
-              destinations: _pages
-                  .map(
-                    (page) => NavigationDestination(
-                      icon: Icon(page.icon),
-                      selectedIcon: Icon(page.selectedIcon),
-                      label: context.tr(page.title),
-                    ),
-                  )
-                  .toList(),
+          : Semantics(
+              container: true,
+              label: context.tr('Primary navigation'),
+              child: NavigationBarTheme(
+                data: NavigationBarThemeData(
+                  labelTextStyle: WidgetStatePropertyAll(
+                    Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontSize: compactNavigation ? 11 : 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                child: NavigationBar(
+                  key: const ValueKey('mobile-navigation'),
+                  selectedIndex: _selectedIndex,
+                  labelBehavior: compactNavigation
+                      ? NavigationDestinationLabelBehavior.onlyShowSelected
+                      : NavigationDestinationLabelBehavior.alwaysShow,
+                  onDestinationSelected: _selectPage,
+                  destinations: _pages
+                      .map(
+                        (page) => NavigationDestination(
+                          tooltip: context.tr(page.title),
+                          icon: Icon(page.icon),
+                          selectedIcon: Icon(page.selectedIcon),
+                          label: context.tr(page.title),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
             ),
     );
   }
@@ -164,9 +205,8 @@ class _DesktopSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = expanded
-        ? AppLayout.sidebarWidth
-        : AppLayout.compactSidebarWidth;
+    final width =
+        expanded ? AppLayout.sidebarWidth : AppLayout.compactSidebarWidth;
     final horizontalPadding = expanded ? AppSpacing.lg : AppSpacing.md;
 
     return AnimatedSize(
@@ -207,11 +247,11 @@ class _DesktopSidebar extends StatelessWidget {
                           'AI Face Security',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.text,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.text,
+                                  ),
                         ),
                       ),
                       IconButton(
@@ -269,42 +309,52 @@ class _SidebarDestination extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected ? AppColors.tealDark : AppColors.textMuted;
-    final destination = Material(
-      color: selected ? AppColors.tealSoft : Colors.transparent,
-      borderRadius: BorderRadius.circular(AppRadii.sm),
-      child: InkWell(
+    final destination = Semantics(
+      button: true,
+      selected: selected,
+      label: context.tr(page.title),
+      excludeSemantics: true,
+      child: Material(
+        color: selected ? AppColors.tealSoft : Colors.transparent,
         borderRadius: BorderRadius.circular(AppRadii.sm),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.md,
-          ),
-          child: Row(
-            mainAxisAlignment: expanded
-                ? MainAxisAlignment.start
-                : MainAxisAlignment.center,
-            children: [
-              Icon(selected ? page.selectedIcon : page.icon, color: color),
-              if (expanded) ...[
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Text(
-                    page.title,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: color,
-                      fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadii.sm),
+          focusColor: AppColors.tealMuted,
+          hoverColor: AppColors.tealSoft,
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Row(
+                mainAxisAlignment: expanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
+                children: [
+                  Icon(selected ? page.selectedIcon : page.icon, color: color),
+                  if (expanded) ...[
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text(
+                        page.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: color,
+                              fontWeight:
+                                  selected ? FontWeight.w900 : FontWeight.w700,
+                            ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            ],
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
 
-    if (expanded) return destination;
     return Tooltip(message: context.tr(page.title), child: destination);
   }
 }

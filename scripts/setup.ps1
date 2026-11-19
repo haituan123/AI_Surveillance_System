@@ -74,7 +74,7 @@ if (-not $SkipBackend) {
     Write-Host "Installing backend dependencies..."
     & $venvPython -m pip install --upgrade pip setuptools wheel
     if ($LASTEXITCODE -ne 0) { throw "Failed to update Python packaging tools." }
-    & $venvPython -m pip install -r (Join-Path $projectRoot "backend\requirements.txt")
+    & $venvPython -m pip install -r (Join-Path $projectRoot "backend\requirements-dev.txt")
     if ($LASTEXITCODE -ne 0) { throw "Failed to install backend dependencies." }
 
     & $venvPython -c "import fastapi, uvicorn, cv2, numpy, onnxruntime; print('Backend dependencies verified.')"
@@ -117,3 +117,4 @@ if (-not $SkipFlutter) {
 Write-Host "Setup complete."
 Write-Host "One-command Windows run: .\scripts\start_windows.ps1"
 Write-Host "Two-terminal run: .\scripts\start_backend.ps1, then .\scripts\start_flutter.ps1"
+Write-Host "Verify: .\scripts\verify_project.ps1"

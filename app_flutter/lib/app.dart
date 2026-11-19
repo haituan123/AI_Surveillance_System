@@ -37,7 +37,7 @@ class _FaceSecurityAppState extends State<FaceSecurityApp> {
         return AppSettingsScope(
           controller: _settings,
           child: MaterialApp(
-            title: 'AI Surveillance System',
+            title: 'AI Security Monitor',
             debugShowCheckedModeBanner: false,
             locale: _settings.locale,
             supportedLocales: const [Locale('en'), Locale('vi')],
@@ -133,6 +133,14 @@ class _FaceSecurityAppState extends State<FaceSecurityApp> {
           ),
         ),
       ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(minimumSize: const Size(44, 44)),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
+      focusColor: primaryForeground.withAlpha(48),
+      hoverColor: primaryForeground.withAlpha(20),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surface,

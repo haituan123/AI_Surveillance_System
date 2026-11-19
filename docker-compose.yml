@@ -11,7 +11,7 @@ services:
     env_file:
       - docker/backend.env
     environment:
-      # Set this in the root .env file only when Video Q&A is required.
+      # Set this in the root .env file only when Investigation Q&A is required.
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.6-flash}"
       GEMINI_FALLBACK_MODEL: "${GEMINI_FALLBACK_MODEL:-gemini-3.1-flash-lite}"

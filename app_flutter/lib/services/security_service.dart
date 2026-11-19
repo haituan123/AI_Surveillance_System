@@ -19,8 +19,8 @@ class ApiException implements Exception {
 
 class SecurityService {
   SecurityService({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
-      baseUrl = baseUrl ?? ApiConfig.baseUrl;
+      : _client = client ?? http.Client(),
+        baseUrl = baseUrl ?? ApiConfig.baseUrl;
 
   final http.Client _client;
   final String baseUrl;

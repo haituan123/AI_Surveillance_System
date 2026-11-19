@@ -20,106 +20,85 @@ void main() {
   );
 
   AlertModel alert(String type, String message) => AlertModel(
-    id: type.hashCode,
-    detectionLogId: unknownLog.id,
-    alertType: type,
-    message: message,
-    cameraName: 'Front door',
-    isRead: false,
-    createdAt: '2026-11-18T08:01:00',
-  );
+        id: type.hashCode,
+        detectionLogId: unknownLog.id,
+        alertType: type,
+        message: message,
+        cameraName: 'Front door',
+        isRead: false,
+        createdAt: '2026-11-18T08:01:00',
+      );
 
   SecurityEventModel event(String type, {String? label}) => SecurityEventModel(
-    id: type.hashCode,
-    sourceId: 'qa-video',
-    sourceType: 'qa_video',
-    sourceName: 'incident.mp4',
-    eventType: type,
-    startTimestamp: 2,
-    endTimestamp: 4,
-    confidence: 0.88,
-    detectedLabel: label,
-    status: 'open',
-    createdAt: '2026-11-18T08:01:00',
-  );
+        id: type.hashCode,
+        sourceId: 'qa-video',
+        sourceType: 'qa_video',
+        sourceName: 'incident.mp4',
+        eventType: type,
+        startTimestamp: 2,
+        endTimestamp: 4,
+        confidence: 0.88,
+        detectedLabel: label,
+        status: 'open',
+        createdAt: '2026-11-18T08:01:00',
+      );
 
   test('person filters distinguish known and unknown detections', () {
-    expect(SecurityRecordFilter.knownPerson.matchesLog(knownLog), isTrue);
-    expect(SecurityRecordFilter.knownPerson.matchesLog(unknownLog), isFalse);
-    expect(SecurityRecordFilter.unknownPerson.matchesLog(unknownLog), isTrue);
+    expect(LiveDetectionFilter.all.matches(knownLog), isTrue);
+    expect(LiveDetectionFilter.known.matches(knownLog), isTrue);
+    expect(LiveDetectionFilter.known.matches(unknownLog), isFalse);
+    expect(LiveDetectionFilter.unknown.matches(unknownLog), isTrue);
+  });
+
+  test('live alert filters are limited to live alert categories', () {
     expect(
-      SecurityRecordFilter.unknownPerson.matchesAlert(
-        alert('fire_smoke', 'Fire detected'),
+      LiveAlertFilter.unknownPerson.matches(
+        alert('unknown_person', 'Unknown person detected'),
+      ),
+      isTrue,
+    );
+    expect(
+      LiveAlertFilter.restrictedArea.matches(
+        alert('restricted_area', 'Restricted area entered'),
+      ),
+      isTrue,
+    );
+    expect(
+      LiveAlertFilter.loitering.matches(alert('loitering', 'Loitering')),
+      isTrue,
+    );
+    expect(
+      LiveAlertFilter.unknownPerson.matches(
+        alert('restricted_area', 'Unknown person in restricted area'),
       ),
       isFalse,
     );
   });
 
-  test('threat filters recognize requested alert categories', () {
+  test('investigation filters recognize only incident categories', () {
     expect(
-      SecurityRecordFilter.fighting.matchesAlert(
-        alert('violence', 'Fighting detected'),
-      ),
+      InvestigationIncidentFilter.violenceFighting.matches(event('fighting')),
       isTrue,
     );
     expect(
-      SecurityRecordFilter.fireSmoke.matchesAlert(
-        alert('fire_smoke', 'Fire and smoke detected'),
-      ),
-      isTrue,
-    );
-    expect(
-      SecurityRecordFilter.shooting.matchesAlert(
-        alert('weapon_drawn', 'Gun shooting detected'),
-      ),
-      isTrue,
-    );
-    expect(
-      SecurityRecordFilter.robberyTheft.matchesAlert(
-        alert('theft', 'Robbery detected'),
-      ),
-      isTrue,
-    );
-  });
-
-  test('linked threat alerts make their detection logs filterable', () {
-    final fightingAlert = alert('violence', 'Fight detected');
-    expect(
-      SecurityRecordFilter.fighting.matchesLog(
-        unknownLog,
-        linkedAlerts: [fightingAlert],
-      ),
-      isTrue,
-    );
-    expect(
-      SecurityRecordFilter.fireSmoke.matchesLog(
-        unknownLog,
-        linkedAlerts: [fightingAlert],
-      ),
-      isFalse,
-    );
-  });
-
-  test('threat filters include indexed security events', () {
-    expect(
-      SecurityRecordFilter.fighting.matchesEvent(event('fighting')),
-      isTrue,
-    );
-    expect(
-      SecurityRecordFilter.fireSmoke.matchesEvent(
+      InvestigationIncidentFilter.fireSmoke.matches(
         event('object_present', label: 'fire'),
       ),
       isTrue,
     );
     expect(
-      SecurityRecordFilter.shooting.matchesEvent(
+      InvestigationIncidentFilter.weapons.matches(
         event('object_present', label: 'knife'),
       ),
       isTrue,
     );
     expect(
-      SecurityRecordFilter.robberyTheft.matchesEvent(event('theft')),
+      InvestigationIncidentFilter.theftRobbery.matches(event('theft')),
       isTrue,
+    );
+    expect(
+      InvestigationIncidentFilter.weapons.matches(event('fighting')),
+      isFalse,
     );
   });
 }

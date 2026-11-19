@@ -97,8 +97,7 @@ class QAMessageModel {
       responseVi: json['response_vi'] as String? ?? '',
       questionType: json['question_type'] as String? ?? 'general',
       createdAt: json['created_at'] as String? ?? '',
-      evidences:
-          (json['evidences'] as List<dynamic>?)
+      evidences: (json['evidences'] as List<dynamic>?)
               ?.map((e) => QAEvidenceModel.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
@@ -199,13 +198,11 @@ class QAConversationDetailModel {
       conversation: QAConversationModel.fromJson(
         json['conversation'] as Map<String, dynamic>,
       ),
-      messages:
-          (json['messages'] as List<dynamic>?)
+      messages: (json['messages'] as List<dynamic>?)
               ?.map((e) => QAMessageModel.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
-      uploadedVideos:
-          (json['uploaded_videos'] as List<dynamic>?)
+      uploadedVideos: (json['uploaded_videos'] as List<dynamic>?)
               ?.map(
                 (e) => QAUploadedVideoModel.fromJson(e as Map<String, dynamic>),
               )

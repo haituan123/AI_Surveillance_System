@@ -19,22 +19,73 @@ class HeaderBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontal = constraints.maxWidth >= AppBreakpoints.compact;
+        final titleWidget = Semantics(
+          header: true,
           child: Text(
             title,
+            maxLines: horizontal ? 1 : 2,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w900,
                   color: AppColors.text,
                 ),
           ),
-        ),
-        if (trailing != null) ...[
-          const SizedBox(width: AppSpacing.md),
-          trailing!,
-        ],
-      ],
+        );
+        final subtitleWidget = Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textMuted,
+                height: 1.35,
+              ),
+        );
+
+        return Semantics(
+          container: true,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ExcludeSemantics(
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.tealSoft,
+                    borderRadius: BorderRadius.circular(AppRadii.sm),
+                  ),
+                  child: Icon(icon, color: AppColors.tealDark),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: horizontal
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Flexible(child: titleWidget),
+                          const SizedBox(width: AppSpacing.xl),
+                          Expanded(child: subtitleWidget),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          titleWidget,
+                          const SizedBox(height: AppSpacing.xs),
+                          subtitleWidget,
+                        ],
+                      ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: AppSpacing.md),
+                trailing!,
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

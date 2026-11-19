@@ -18,17 +18,18 @@ class MembersScreen extends StatefulWidget {
     super.key,
     required this.refreshToken,
     required this.onMembersChanged,
+    this.memberService = const MemberService(),
   });
 
   final int refreshToken;
   final VoidCallback onMembersChanged;
+  final MemberService memberService;
 
   @override
   State<MembersScreen> createState() => _MembersScreenState();
 }
 
 class _MembersScreenState extends State<MembersScreen> {
-  final MemberService _memberService = const MemberService();
   final TextEditingController _searchController = TextEditingController();
   final Set<int> _deletingMemberIds = {};
 
@@ -38,7 +39,7 @@ class _MembersScreenState extends State<MembersScreen> {
   @override
   void initState() {
     super.initState();
-    _membersFuture = _memberService.listMembers();
+    _membersFuture = widget.memberService.listMembers();
     _searchController.addListener(_updateQuery);
   }
 
@@ -66,7 +67,7 @@ class _MembersScreenState extends State<MembersScreen> {
 
   void _refreshMembers() {
     setState(() {
-      _membersFuture = _memberService.listMembers();
+      _membersFuture = widget.memberService.listMembers();
     });
   }
 
@@ -90,7 +91,7 @@ class _MembersScreenState extends State<MembersScreen> {
       maxWidth: AppLayout.dataMaxWidth,
       children: [
         HeaderBlock(
-          title: 'Members',
+          title: 'People',
           subtitle: 'Review registered people and manage saved face images.',
           icon: Icons.people_alt,
         ),
@@ -191,7 +192,7 @@ class _MembersScreenState extends State<MembersScreen> {
 
     setState(() => _deletingMemberIds.add(member.id));
     try {
-      await _memberService.deleteMember(member.id);
+      await widget.memberService.deleteMember(member.id);
       if (!mounted) return;
       _refreshMembers();
       widget.onMembersChanged();

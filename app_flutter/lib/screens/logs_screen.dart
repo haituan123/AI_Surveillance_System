@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' hide Text;
 
-import '../core/app_localization.dart';
 import '../core/timestamp_formatter.dart';
 import '../models/security_models.dart';
 import '../services/security_service.dart';
@@ -22,117 +21,104 @@ class LogsScreen extends StatefulWidget {
   State<LogsScreen> createState() => _LogsScreenState();
 }
 
-enum SecurityRecordFilter {
-  knownPerson,
-  unknownPerson,
-  fighting,
-  fireSmoke,
-  shooting,
-  robberyTheft,
-}
+enum LiveDetectionFilter { all, known, unknown }
 
-extension SecurityRecordFilterDetails on SecurityRecordFilter {
+extension LiveDetectionFilterDetails on LiveDetectionFilter {
   String get label => switch (this) {
-    SecurityRecordFilter.knownPerson => 'Known person',
-    SecurityRecordFilter.unknownPerson => 'Unknown person',
-    SecurityRecordFilter.fighting => 'Fighting',
-    SecurityRecordFilter.fireSmoke => 'Fire / smoke',
-    SecurityRecordFilter.shooting => 'Weapon / shooting',
-    SecurityRecordFilter.robberyTheft => 'Robbery / theft',
-  };
+        LiveDetectionFilter.all => 'All',
+        LiveDetectionFilter.known => 'Known',
+        LiveDetectionFilter.unknown => 'Unknown',
+      };
 
   IconData get icon => switch (this) {
-    SecurityRecordFilter.knownPerson => Icons.verified_user_outlined,
-    SecurityRecordFilter.unknownPerson => Icons.person_search_outlined,
-    SecurityRecordFilter.fighting => Icons.sports_mma_outlined,
-    SecurityRecordFilter.fireSmoke => Icons.local_fire_department_outlined,
-    SecurityRecordFilter.shooting => Icons.gps_fixed,
-    SecurityRecordFilter.robberyTheft => Icons.front_hand_outlined,
-  };
+        LiveDetectionFilter.all => Icons.select_all,
+        LiveDetectionFilter.known => Icons.verified_user_outlined,
+        LiveDetectionFilter.unknown => Icons.person_search_outlined,
+      };
 
-  bool matchesLog(
-    DetectionLogModel log, {
-    Iterable<AlertModel> linkedAlerts = const [],
-  }) {
+  bool matches(DetectionLogModel log) {
     return switch (this) {
-      SecurityRecordFilter.knownPerson => log.status == 'known',
-      SecurityRecordFilter.unknownPerson => log.status != 'known',
-      _ => linkedAlerts.any(matchesAlert),
+      LiveDetectionFilter.all => true,
+      LiveDetectionFilter.known => log.status == 'known',
+      LiveDetectionFilter.unknown => log.status != 'known',
     };
   }
+}
 
-  bool matchesAlert(AlertModel alert, {DetectionLogModel? linkedLog}) {
-    final type = alert.alertType.toLowerCase();
-    final message = alert.message.toLowerCase();
+enum LiveAlertFilter { all, unknownPerson, restrictedArea, loitering }
+
+extension LiveAlertFilterDetails on LiveAlertFilter {
+  String get label => switch (this) {
+        LiveAlertFilter.all => 'All',
+        LiveAlertFilter.unknownPerson => 'Unknown person',
+        LiveAlertFilter.restrictedArea => 'Restricted area',
+        LiveAlertFilter.loitering => 'Loitering',
+      };
+
+  IconData get icon => switch (this) {
+        LiveAlertFilter.all => Icons.select_all,
+        LiveAlertFilter.unknownPerson => Icons.person_off_outlined,
+        LiveAlertFilter.restrictedArea => Icons.fence,
+        LiveAlertFilter.loitering => Icons.timelapse,
+      };
+
+  bool matches(AlertModel alert) {
     return switch (this) {
-      SecurityRecordFilter.knownPerson => linkedLog?.status == 'known',
-      SecurityRecordFilter.unknownPerson =>
-        (linkedLog != null && linkedLog.status != 'known') ||
-            type == 'unknown_person' ||
-            type == 'restricted_area' ||
-            type == 'loitering' ||
-            message.contains('unknown person'),
-      SecurityRecordFilter.fighting =>
-        type == 'violence' ||
-            type == 'fighting' ||
-            message.contains('fight') ||
-            message.contains('violence') ||
-            message.contains('đánh nhau'),
-      SecurityRecordFilter.fireSmoke =>
-        type == 'fire_smoke' ||
-            message.contains('fire') ||
-            message.contains('smoke') ||
-            message.contains('explosion') ||
-            message.contains('cháy') ||
-            message.contains('nổ'),
-      SecurityRecordFilter.shooting =>
-        type == 'shooting' ||
-            type == 'weapon_drawn' ||
-            type == 'weapon_present' ||
-            type == 'knife_threat' ||
-            type == 'knife_present' ||
-            message.contains('shoot') ||
-            message.contains('gun') ||
-            message.contains('knife') ||
-            message.contains('firearm') ||
-            message.contains('bắn súng'),
-      SecurityRecordFilter.robberyTheft =>
-        type == 'theft' ||
-            type.startsWith('robbery') ||
-            message.contains('robbery') ||
-            message.contains('theft') ||
-            message.contains('stolen') ||
-            message.contains('cướp') ||
-            message.contains('trộm'),
+      LiveAlertFilter.all => true,
+      LiveAlertFilter.unknownPerson =>
+        alert.category == AlertCategory.unknownPerson,
+      LiveAlertFilter.restrictedArea =>
+        alert.category == AlertCategory.restrictedArea,
+      LiveAlertFilter.loitering => alert.category == AlertCategory.loitering,
     };
   }
+}
 
-  bool matchesEvent(SecurityEventModel event) {
+enum InvestigationIncidentFilter {
+  all,
+  weapons,
+  violenceFighting,
+  fireSmoke,
+  theftRobbery,
+}
+
+extension InvestigationIncidentFilterDetails on InvestigationIncidentFilter {
+  String get label => switch (this) {
+        InvestigationIncidentFilter.all => 'All',
+        InvestigationIncidentFilter.weapons => 'Weapons',
+        InvestigationIncidentFilter.violenceFighting => 'Violence / Fighting',
+        InvestigationIncidentFilter.fireSmoke => 'Fire / Smoke',
+        InvestigationIncidentFilter.theftRobbery => 'Theft / Robbery',
+      };
+
+  IconData get icon => switch (this) {
+        InvestigationIncidentFilter.all => Icons.select_all,
+        InvestigationIncidentFilter.weapons => Icons.gps_fixed,
+        InvestigationIncidentFilter.violenceFighting =>
+          Icons.sports_mma_outlined,
+        InvestigationIncidentFilter.fireSmoke =>
+          Icons.local_fire_department_outlined,
+        InvestigationIncidentFilter.theftRobbery => Icons.front_hand_outlined,
+      };
+
+  bool matches(SecurityEventModel event) {
     final type = event.eventType.toLowerCase();
     final label = event.detectedLabel?.toLowerCase() ?? '';
     return switch (this) {
-      SecurityRecordFilter.knownPerson ||
-      SecurityRecordFilter.unknownPerson => false,
-      SecurityRecordFilter.fighting => type == 'fighting' || type == 'violence',
-      SecurityRecordFilter.fireSmoke =>
+      InvestigationIncidentFilter.all => true,
+      InvestigationIncidentFilter.weapons => type == 'shooting' ||
+          type == 'weapon_drawn' ||
+          type == 'weapon_present' ||
+          type == 'knife_threat' ||
+          type == 'knife_present' ||
+          const {'gun', 'pistol', 'rifle', 'knife', 'scissors'}.contains(label),
+      InvestigationIncidentFilter.violenceFighting =>
+        type == 'fighting' || type == 'violence',
+      InvestigationIncidentFilter.fireSmoke =>
         type == 'fire_smoke' || label == 'fire' || label == 'smoke',
-      SecurityRecordFilter.shooting =>
-        type == 'shooting' ||
-            type == 'weapon_drawn' ||
-            type == 'weapon_present' ||
-            type == 'knife_threat' ||
-            type == 'knife_present' ||
-            const {
-              'gun',
-              'pistol',
-              'rifle',
-              'knife',
-              'scissors',
-            }.contains(label),
-      SecurityRecordFilter.robberyTheft =>
-        type == 'theft' ||
-            type == 'possible_theft' ||
-            type.startsWith('robbery'),
+      InvestigationIncidentFilter.theftRobbery => type == 'theft' ||
+          type == 'possible_theft' ||
+          type.startsWith('robbery'),
     };
   }
 }
@@ -145,7 +131,9 @@ class _LogsScreenState extends State<LogsScreen> {
   List<SecurityEventModel> _events = const [];
   Set<int> _selectedLogIds = const {};
   Set<int> _selectedAlertIds = const {};
-  Set<SecurityRecordFilter> _activeFilters = const {};
+  LiveDetectionFilter _detectionFilter = LiveDetectionFilter.all;
+  LiveAlertFilter _alertFilter = LiveAlertFilter.all;
+  InvestigationIncidentFilter _incidentFilter = InvestigationIncidentFilter.all;
   bool _loading = true;
   bool _deletingLogs = false;
   bool _deletingAlerts = false;
@@ -156,48 +144,15 @@ class _LogsScreenState extends State<LogsScreen> {
   bool get _busy => _loading || _deletingLogs || _deletingAlerts;
 
   List<DetectionLogModel> get _visibleLogs {
-    if (_activeFilters.isEmpty) return _logs;
-    return _logs.where((log) {
-      final linkedAlerts = _alerts.where(
-        (alert) => alert.detectionLogId == log.id,
-      );
-      return _activeFilters.any(
-        (filter) => filter.matchesLog(log, linkedAlerts: linkedAlerts),
-      );
-    }).toList();
+    return _logs.where(_detectionFilter.matches).toList();
   }
 
   List<AlertModel> get _visibleAlerts {
-    if (_activeFilters.isEmpty) return _alerts;
-    return _alerts.where((alert) {
-      DetectionLogModel? linkedLog;
-      for (final log in _logs) {
-        if (log.id == alert.detectionLogId) {
-          linkedLog = log;
-          break;
-        }
-      }
-      return _activeFilters.any(
-        (filter) => filter.matchesAlert(alert, linkedLog: linkedLog),
-      );
-    }).toList();
+    return _alerts.where(_alertFilter.matches).toList();
   }
 
   List<SecurityEventModel> get _visibleEvents {
-    if (_activeFilters.isEmpty) return _events;
-    return _events
-        .where(
-          (event) => _activeFilters.any((filter) => filter.matchesEvent(event)),
-        )
-        .toList();
-  }
-
-  void _toggleFilter(SecurityRecordFilter filter) {
-    setState(() {
-      final next = {..._activeFilters};
-      if (!next.add(filter)) next.remove(filter);
-      _activeFilters = next;
-    });
+    return _events.where(_incidentFilter.matches).toList();
   }
 
   @override
@@ -344,10 +299,10 @@ class _LogsScreenState extends State<LogsScreen> {
     if (count == 0 || _deletingLogs) return;
 
     final confirmed = await _confirmDelete(
-      title: count == 1 ? 'Delete log' : 'Delete logs',
+      title: count == 1 ? 'Delete detection' : 'Delete detections',
       message: count == 1
-          ? 'Delete this detection log from persistent storage?'
-          : 'Delete these $count detection logs from persistent storage?',
+          ? 'Delete this saved detection from Activity?'
+          : 'Delete these $count saved detections from Activity?',
     );
     if (confirmed != true) return;
 
@@ -364,7 +319,9 @@ class _LogsScreenState extends State<LogsScreen> {
       if (!mounted) return;
       showAppSnackBar(
         context,
-        message: count == 1 ? 'Deleted selected log.' : 'Deleted $count logs.',
+        message: count == 1
+            ? 'Deleted selected detection.'
+            : 'Deleted $count detections.',
         tone: AppMessageTone.success,
       );
     } catch (error) {
@@ -399,9 +356,8 @@ class _LogsScreenState extends State<LogsScreen> {
       if (!mounted) return;
       showAppSnackBar(
         context,
-        message: count == 1
-            ? 'Deleted selected alert.'
-            : 'Deleted $count alerts.',
+        message:
+            count == 1 ? 'Deleted selected alert.' : 'Deleted $count alerts.',
         tone: AppMessageTone.success,
       );
     } catch (error) {
@@ -414,8 +370,8 @@ class _LogsScreenState extends State<LogsScreen> {
   Future<void> _deleteAllLogs() async {
     if (_logs.isEmpty || _deletingLogs) return;
     final confirmed = await _confirmDelete(
-      title: 'Delete all logs',
-      message: 'Delete all detection logs from persistent storage?',
+      title: 'Delete all detections',
+      message: 'Delete all saved detections from Activity?',
     );
     if (!confirmed) return;
 
@@ -431,7 +387,7 @@ class _LogsScreenState extends State<LogsScreen> {
       if (!mounted) return;
       showAppSnackBar(
         context,
-        message: 'Deleted all logs.',
+        message: 'Deleted all detections.',
         tone: AppMessageTone.success,
       );
     } catch (error) {
@@ -473,8 +429,8 @@ class _LogsScreenState extends State<LogsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final listHeight = (MediaQuery.sizeOf(context).height - 400)
-        .clamp(360.0, 700.0)
+    final listHeight = (MediaQuery.sizeOf(context).height - 220)
+        .clamp(520.0, 700.0)
         .toDouble();
     final unknownLabels = _UnknownPersonLabels(logs: _logs, alerts: _alerts);
     final visibleLogs = _visibleLogs;
@@ -487,9 +443,9 @@ class _LogsScreenState extends State<LogsScreen> {
         maxWidth: AppLayout.dataMaxWidth,
         children: [
           HeaderBlock(
-            title: 'Persistent Logs & Alerts',
+            title: 'Activity',
             subtitle:
-                'Review live detections, alerts, and indexed security events in one place.',
+                'Review saved Live monitoring detections and alerts, plus incidents indexed by Investigations. Quick video scan results never appear here.',
             icon: Icons.receipt_long,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -502,54 +458,52 @@ class _LogsScreenState extends State<LogsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TabBar(
-                    tabs: [
-                      Tab(
-                        icon: Icon(Icons.fact_check_outlined),
-                        text: 'Detection logs (${visibleLogs.length})',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.notifications_outlined),
-                        text: 'Alerts (${visibleAlerts.length})',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.shield_outlined),
-                        text: 'Security events (${visibleEvents.length})',
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact =
+                          constraints.maxWidth < AppBreakpoints.compact;
+                      return TabBar(
+                        isScrollable: false,
+                        tabs: [
+                          Tab(
+                            icon: compact
+                                ? null
+                                : Icon(Icons.fact_check_outlined),
+                            child: Text(
+                              compact
+                                  ? 'Detections'
+                                  : 'Live detections (${_logs.length})',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Tab(
+                            icon: compact
+                                ? null
+                                : Icon(Icons.notifications_outlined),
+                            child: Text(
+                              compact
+                                  ? 'Alerts'
+                                  : 'Live alerts (${_alerts.length})',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Tab(
+                            icon: compact ? null : Icon(Icons.shield_outlined),
+                            child: Text(
+                              compact
+                                  ? 'Incidents'
+                                  : 'Investigation incidents (${_events.length})',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   if (_loading) const LinearProgressIndicator(),
-                  const SizedBox(height: AppSpacing.sm),
-                  _SecurityFilterBar(
-                    selected: _activeFilters,
-                    visibleLogCount: visibleLogs.length,
-                    totalLogCount: _logs.length,
-                    visibleAlertCount: visibleAlerts.length,
-                    totalAlertCount: _alerts.length,
-                    visibleEventCount: visibleEvents.length,
-                    totalEventCount: _events.length,
-                    onToggle: _toggleFilter,
-                    onClear: () => setState(() => _activeFilters = const {}),
-                  ),
-                  if (_selectedLogIds.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _SelectionToolbar(
-                      label: '${_selectedLogIds.length} log selected',
-                      deleting: _deletingLogs,
-                      onClear: () => setState(() => _selectedLogIds = const {}),
-                      onDelete: _deleteSelectedLogs,
-                    ),
-                  ],
-                  if (_selectedAlertIds.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _SelectionToolbar(
-                      label: '${_selectedAlertIds.length} alert selected',
-                      deleting: _deletingAlerts,
-                      onClear: () =>
-                          setState(() => _selectedAlertIds = const {}),
-                      onDelete: _deleteSelectedAlerts,
-                    ),
-                  ],
                   const SizedBox(height: AppSpacing.md),
                   SizedBox(
                     height: listHeight,
@@ -558,29 +512,42 @@ class _LogsScreenState extends State<LogsScreen> {
                         _DetectionLogsTab(
                           logs: visibleLogs,
                           totalCount: _logs.length,
-                          filtered: _activeFilters.isNotEmpty,
+                          filter: _detectionFilter,
+                          onFilterChanged: (filter) =>
+                              setState(() => _detectionFilter = filter),
                           unknownLabels: unknownLabels,
                           loading: _loading,
                           deleting: _deletingLogs,
                           selectedIds: _selectedLogIds,
+                          onClearSelection: () =>
+                              setState(() => _selectedLogIds = const {}),
                           onToggleSelection: _toggleLogSelection,
+                          onDeleteSelected: _deleteSelectedLogs,
                           onDeleteAll: _deleteAllLogs,
                         ),
                         _AlertsTab(
                           alerts: visibleAlerts,
                           totalCount: _alerts.length,
-                          filtered: _activeFilters.isNotEmpty,
+                          filter: _alertFilter,
+                          onFilterChanged: (filter) =>
+                              setState(() => _alertFilter = filter),
                           unknownLabels: unknownLabels,
                           loading: _loading,
                           deleting: _deletingAlerts,
                           selectedIds: _selectedAlertIds,
+                          onClearSelection: () =>
+                              setState(() => _selectedAlertIds = const {}),
                           onToggleSelection: _toggleAlertSelection,
                           onToggleRead: _toggleRead,
+                          onDeleteSelected: _deleteSelectedAlerts,
                           onDeleteAll: _deleteAllAlerts,
                         ),
                         _SecurityEventsTab(
                           events: visibleEvents,
-                          filtered: _activeFilters.isNotEmpty,
+                          totalCount: _events.length,
+                          filter: _incidentFilter,
+                          onFilterChanged: (filter) =>
+                              setState(() => _incidentFilter = filter),
                           loading: _loading,
                         ),
                       ],
@@ -596,59 +563,32 @@ class _LogsScreenState extends State<LogsScreen> {
   }
 }
 
-class _SecurityFilterBar extends StatelessWidget {
-  const _SecurityFilterBar({
+class _TabFilterBar<T> extends StatelessWidget {
+  const _TabFilterBar({
+    required this.options,
     required this.selected,
-    required this.visibleLogCount,
-    required this.totalLogCount,
-    required this.visibleAlertCount,
-    required this.totalAlertCount,
-    required this.visibleEventCount,
-    required this.totalEventCount,
-    required this.onToggle,
-    required this.onClear,
+    required this.labelFor,
+    required this.iconFor,
+    required this.visibleCount,
+    required this.totalCount,
+    required this.recordLabel,
+    required this.keyPrefix,
+    required this.onSelected,
   });
 
-  final Set<SecurityRecordFilter> selected;
-  final int visibleLogCount;
-  final int totalLogCount;
-  final int visibleAlertCount;
-  final int totalAlertCount;
-  final int visibleEventCount;
-  final int totalEventCount;
-  final ValueChanged<SecurityRecordFilter> onToggle;
-  final VoidCallback onClear;
+  final List<T> options;
+  final T selected;
+  final String Function(T value) labelFor;
+  final IconData Function(T value) iconFor;
+  final int visibleCount;
+  final int totalCount;
+  final String recordLabel;
+  final String keyPrefix;
+  final ValueChanged<T> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final unselectedForeground = Theme.of(context).colorScheme.onSurface;
-
-    Widget buildFilterChip({
-      required String label,
-      required IconData icon,
-      required bool selected,
-      required ValueChanged<bool> onSelected,
-      Key? key,
-    }) {
-      final foreground = selected ? Colors.white : unselectedForeground;
-      return FilterChip(
-        key: key,
-        label: Text(
-          label,
-          style: TextStyle(color: foreground, fontWeight: FontWeight.w800),
-        ),
-        avatar: Icon(icon, size: 17, color: foreground),
-        selected: selected,
-        selectedColor: AppColors.teal,
-        checkmarkColor: Colors.white,
-        showCheckmark: false,
-        side: BorderSide(
-          color: selected ? AppColors.teal : AppColors.borderStrong,
-          width: selected ? 2 : 1,
-        ),
-        onSelected: onSelected,
-      );
-    }
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -661,92 +601,62 @@ class _SecurityFilterBar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final title = Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.filter_alt_outlined,
-                      size: 18,
-                      color: AppColors.teal,
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      'Security filters',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            Row(
+              children: [
+                Icon(
+                  Icons.filter_alt_outlined,
+                  size: 18,
+                  color: AppColors.teal,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  'Filter',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: AppColors.text,
                         fontWeight: FontWeight.w800,
                       ),
-                    ),
-                  ],
-                );
-                final summary = Text(
-                  '$visibleLogCount/$totalLogCount logs • '
-                  '$visibleAlertCount/$totalAlertCount alerts • '
-                  '$visibleEventCount/$totalEventCount events',
+                ),
+                const Spacer(),
+                Text(
+                  '$visibleCount/$totalCount $recordLabel',
                   style: TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
-                );
-                final clearButton = selected.isEmpty
-                    ? null
-                    : IconButton(
-                        onPressed: onClear,
-                        visualDensity: VisualDensity.compact,
-                        tooltip: context.tr('Clear filters'),
-                        icon: const Icon(
-                          Icons.filter_alt_off_outlined,
-                          size: 19,
-                        ),
-                      );
-
-                if (constraints.maxWidth < AppBreakpoints.compact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [title, const Spacer(), ?clearButton]),
-                      const SizedBox(height: AppSpacing.xs),
-                      summary,
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [title, const Spacer(), summary, ?clearButton],
-                );
-              },
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.xs),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: AppSpacing.sm),
-                    child: buildFilterChip(
-                      label: 'All events',
-                      icon: Icons.select_all,
-                      selected: selected.isEmpty,
-                      onSelected: (_) => onClear(),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: options.map((option) {
+                final isSelected = option == selected;
+                final foreground =
+                    isSelected ? Colors.white : unselectedForeground;
+                return FilterChip(
+                  key: ValueKey(
+                      '$keyPrefix-${option.toString().split('.').last}'),
+                  label: Text(
+                    labelFor(option),
+                    style: TextStyle(
+                      color: foreground,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  ...SecurityRecordFilter.values.map(
-                    (filter) => Padding(
-                      padding: const EdgeInsets.only(right: AppSpacing.sm),
-                      child: buildFilterChip(
-                        key: ValueKey('security-filter-${filter.name}'),
-                        label: filter.label,
-                        icon: filter.icon,
-                        selected: selected.contains(filter),
-                        onSelected: (_) => onToggle(filter),
-                      ),
-                    ),
+                  avatar: Icon(iconFor(option), size: 17, color: foreground),
+                  selected: isSelected,
+                  selectedColor: AppColors.teal,
+                  checkmarkColor: Colors.white,
+                  showCheckmark: false,
+                  side: BorderSide(
+                    color: isSelected ? AppColors.teal : AppColors.borderStrong,
+                    width: isSelected ? 2 : 1,
                   ),
-                ],
-              ),
+                  onSelected: (_) => onSelected(option),
+                );
+              }).toList(),
             ),
           ],
         ),
@@ -787,20 +697,19 @@ class _UnknownPersonLabels {
       _restrictedAlertsByLogId[alert.detectionLogId!] = alert;
     }
 
-    final unlinkedUnknownAlerts =
-        alerts
-            .where(
-              (alert) =>
-                  _isUnknownAlert(alert) &&
-                  (alert.detectionLogId == null ||
-                      !_labelsByLogId.containsKey(alert.detectionLogId)),
-            )
-            .toList()
-          ..sort((a, b) {
-            final timeComparison = a.createdAt.compareTo(b.createdAt);
-            if (timeComparison != 0) return timeComparison;
-            return a.id.compareTo(b.id);
-          });
+    final unlinkedUnknownAlerts = alerts
+        .where(
+          (alert) =>
+              _isUnknownAlert(alert) &&
+              (alert.detectionLogId == null ||
+                  !_labelsByLogId.containsKey(alert.detectionLogId)),
+        )
+        .toList()
+      ..sort((a, b) {
+        final timeComparison = a.createdAt.compareTo(b.createdAt);
+        if (timeComparison != 0) return timeComparison;
+        return a.id.compareTo(b.id);
+      });
 
     final nextIndex = _labelsByLogId.length + 1;
     for (final entry in unlinkedUnknownAlerts.indexed) {
@@ -887,53 +796,83 @@ class _DetectionLogsTab extends StatelessWidget {
   const _DetectionLogsTab({
     required this.logs,
     required this.totalCount,
-    required this.filtered,
+    required this.filter,
+    required this.onFilterChanged,
     required this.unknownLabels,
     required this.loading,
     required this.deleting,
     required this.selectedIds,
+    required this.onClearSelection,
     required this.onToggleSelection,
+    required this.onDeleteSelected,
     required this.onDeleteAll,
   });
 
   final List<DetectionLogModel> logs;
   final int totalCount;
-  final bool filtered;
+  final LiveDetectionFilter filter;
+  final ValueChanged<LiveDetectionFilter> onFilterChanged;
   final _UnknownPersonLabels unknownLabels;
   final bool loading;
   final bool deleting;
   final Set<int> selectedIds;
+  final VoidCallback onClearSelection;
   final void Function(DetectionLogModel log, bool selected) onToggleSelection;
+  final VoidCallback onDeleteSelected;
   final VoidCallback onDeleteAll;
 
   @override
   Widget build(BuildContext context) {
     if (loading && logs.isEmpty) {
-      return const _LoadingRows(label: 'Loading detection logs');
+      return const _LoadingRows(label: 'Loading detections');
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _TabActionRow(
-          title: 'Live detection history',
+          title: 'Live detections',
+          description:
+              'Known and unknown people detected and saved during Live monitoring.',
           action: OutlinedButton.icon(
             onPressed: totalCount == 0 || deleting ? null : onDeleteAll,
             icon: Icon(Icons.delete_sweep_outlined),
-            label: Text('Delete all logs'),
+            label: Text('Delete all detections'),
           ),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        _TabFilterBar<LiveDetectionFilter>(
+          options: LiveDetectionFilter.values,
+          selected: filter,
+          labelFor: (value) => value.label,
+          iconFor: (value) => value.icon,
+          visibleCount: logs.length,
+          totalCount: totalCount,
+          recordLabel: 'detections',
+          keyPrefix: 'live-detection-filter',
+          onSelected: onFilterChanged,
+        ),
+        if (selectedIds.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _SelectionToolbar(
+            label: '${selectedIds.length} detection selected',
+            deleting: deleting,
+            onClear: onClearSelection,
+            onDelete: onDeleteSelected,
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         Expanded(
           child: logs.isEmpty
               ? EmptyPanel(
                   icon: Icons.inbox_outlined,
-                  title: filtered
-                      ? 'No matching detection logs'
-                      : 'No live detection logs',
-                  message: filtered
-                      ? 'Try selecting a different security filter.'
-                      : 'Start live surveillance to create history.',
+                  title: filter != LiveDetectionFilter.all
+                      ? 'No matching detections'
+                      : 'No saved Live monitoring detections',
+                  message: filter != LiveDetectionFilter.all
+                      ? 'Try selecting a different detection filter.'
+                      : 'Start Live monitoring to save known or unknown people and restricted-zone violations here.',
+                  compact: true,
                 )
               : ListView.builder(
                   itemCount: logs.length,
@@ -959,25 +898,31 @@ class _AlertsTab extends StatelessWidget {
   const _AlertsTab({
     required this.alerts,
     required this.totalCount,
-    required this.filtered,
+    required this.filter,
+    required this.onFilterChanged,
     required this.unknownLabels,
     required this.loading,
     required this.deleting,
     required this.selectedIds,
+    required this.onClearSelection,
     required this.onToggleSelection,
     required this.onToggleRead,
+    required this.onDeleteSelected,
     required this.onDeleteAll,
   });
 
   final List<AlertModel> alerts;
   final int totalCount;
-  final bool filtered;
+  final LiveAlertFilter filter;
+  final ValueChanged<LiveAlertFilter> onFilterChanged;
   final _UnknownPersonLabels unknownLabels;
   final bool loading;
   final bool deleting;
   final Set<int> selectedIds;
+  final VoidCallback onClearSelection;
   final void Function(AlertModel alert, bool selected) onToggleSelection;
   final ValueChanged<AlertModel> onToggleRead;
+  final VoidCallback onDeleteSelected;
   final VoidCallback onDeleteAll;
 
   @override
@@ -990,7 +935,9 @@ class _AlertsTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _TabActionRow(
-          title: 'Alert inbox',
+          title: 'Live alerts',
+          description:
+              'Unknown-person, restricted-area, and loitering alerts saved during Live monitoring.',
           action: OutlinedButton.icon(
             onPressed: totalCount == 0 || deleting ? null : onDeleteAll,
             icon: Icon(Icons.delete_sweep_outlined),
@@ -998,16 +945,38 @@ class _AlertsTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
+        _TabFilterBar<LiveAlertFilter>(
+          options: LiveAlertFilter.values,
+          selected: filter,
+          labelFor: (value) => value.label,
+          iconFor: (value) => value.icon,
+          visibleCount: alerts.length,
+          totalCount: totalCount,
+          recordLabel: 'alerts',
+          keyPrefix: 'live-alert-filter',
+          onSelected: onFilterChanged,
+        ),
+        if (selectedIds.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _SelectionToolbar(
+            label: '${selectedIds.length} alert selected',
+            deleting: deleting,
+            onClear: onClearSelection,
+            onDelete: onDeleteSelected,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sm),
         Expanded(
           child: alerts.isEmpty
               ? EmptyPanel(
                   icon: Icons.notifications_none,
-                  title: filtered
+                  title: filter != LiveAlertFilter.all
                       ? 'No matching alerts'
                       : 'No persistent alerts',
-                  message: filtered
-                      ? 'Try selecting a different security filter.'
-                      : 'Confirmed unknown people from live mode appear here.',
+                  message: filter != LiveAlertFilter.all
+                      ? 'Try selecting a different alert filter.'
+                      : 'Saved alerts from Live monitoring appear here.',
+                  compact: true,
                 )
               : ListView.builder(
                   itemCount: alerts.length,
@@ -1033,37 +1002,58 @@ class _AlertsTab extends StatelessWidget {
 class _SecurityEventsTab extends StatelessWidget {
   const _SecurityEventsTab({
     required this.events,
-    required this.filtered,
+    required this.totalCount,
+    required this.filter,
+    required this.onFilterChanged,
     required this.loading,
   });
 
   final List<SecurityEventModel> events;
-  final bool filtered;
+  final int totalCount;
+  final InvestigationIncidentFilter filter;
+  final ValueChanged<InvestigationIncidentFilter> onFilterChanged;
   final bool loading;
 
   @override
   Widget build(BuildContext context) {
     if (loading && events.isEmpty) {
-      return const _LoadingRows(label: 'Loading security events');
+      return const _LoadingRows(label: 'Loading investigation incidents');
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _TabActionRow(
-          title: 'Indexed security events',
+          title: 'Investigation incidents',
+          description:
+              'Persistent security incidents generated from indexed Investigation videos.',
+          note:
+              'To remove these incidents, delete their source video in Investigations.',
           action: SizedBox.shrink(),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _TabFilterBar<InvestigationIncidentFilter>(
+          options: InvestigationIncidentFilter.values,
+          selected: filter,
+          labelFor: (value) => value.label,
+          iconFor: (value) => value.icon,
+          visibleCount: events.length,
+          totalCount: totalCount,
+          recordLabel: 'incidents',
+          keyPrefix: 'investigation-filter',
+          onSelected: onFilterChanged,
         ),
         const SizedBox(height: AppSpacing.sm),
         Expanded(
           child: events.isEmpty
               ? EmptyPanel(
                   icon: Icons.shield_outlined,
-                  title: filtered
-                      ? 'No matching security events'
-                      : 'No indexed security events',
-                  message: filtered
-                      ? 'Try selecting a different security filter.'
-                      : 'Analyze a Q&A video to create security events.',
+                  title: filter != InvestigationIncidentFilter.all
+                      ? 'No matching investigation incidents'
+                      : 'No indexed investigation incidents',
+                  message: filter != InvestigationIncidentFilter.all
+                      ? 'Try selecting a different incident filter.'
+                      : 'Upload and index a video in Investigations to add incidents to Activity.',
+                  compact: true,
                 )
               : ListView.builder(
                   itemCount: events.length,
@@ -1082,28 +1072,29 @@ class _SecurityEventRow extends StatelessWidget {
   final SecurityEventModel event;
 
   bool get _danger => const {
-    'fighting',
-    'violence',
-    'fire_smoke',
-    'shooting',
-    'weapon_drawn',
-    'weapon_present',
-    'knife_threat',
-    'knife_present',
-  }.contains(event.eventType);
+        'fighting',
+        'violence',
+        'fire_smoke',
+        'shooting',
+        'weapon_drawn',
+        'weapon_present',
+        'knife_threat',
+        'knife_present',
+      }.contains(event.eventType);
 
   IconData get _icon => switch (event.eventType) {
-    'fire_smoke' => Icons.local_fire_department,
-    'fighting' || 'violence' => Icons.sports_mma,
-    'shooting' || 'weapon_drawn' || 'weapon_present' => Icons.gps_fixed,
-    'knife_threat' || 'knife_present' => Icons.warning_amber_rounded,
-    'robbery_motorbike' => Icons.two_wheeler,
-    'robbery_backpack' ||
-    'robbery_phone' ||
-    'theft' ||
-    'possible_theft' => Icons.front_hand_outlined,
-    _ => Icons.shield_outlined,
-  };
+        'fire_smoke' => Icons.local_fire_department,
+        'fighting' || 'violence' => Icons.sports_mma,
+        'shooting' || 'weapon_drawn' || 'weapon_present' => Icons.gps_fixed,
+        'knife_threat' || 'knife_present' => Icons.warning_amber_rounded,
+        'robbery_motorbike' => Icons.two_wheeler,
+        'robbery_backpack' ||
+        'robbery_phone' ||
+        'theft' ||
+        'possible_theft' =>
+          Icons.front_hand_outlined,
+        _ => Icons.shield_outlined,
+      };
 
   String get _title => event.eventType
       .split('_')
@@ -1126,15 +1117,14 @@ class _SecurityEventRow extends StatelessWidget {
     final range = event.startTimestamp == event.endTimestamp
         ? _formatPosition(event.startTimestamp)
         : '${_formatPosition(event.startTimestamp)}–${_formatPosition(event.endTimestamp)}';
-    final object = event.detectedLabel == null
-        ? ''
-        : ' • ${event.detectedLabel}';
+    final object =
+        event.detectedLabel == null ? '' : ' • ${event.detectedLabel}';
     return _SelectableRecordCard(
       selected: false,
       severe: _danger,
       icon: Icon(_icon, color: _danger ? AppColors.danger : AppColors.warning),
       title: '$_title • Confidence $confidence',
-      subtitle: '${event.sourceName}$object • $range',
+      subtitle: 'Investigation video: ${event.sourceName}$object • $range',
       timestamp: formatBackendTimestamp(event.createdAt),
       onTap: null,
     );
@@ -1142,10 +1132,17 @@ class _SecurityEventRow extends StatelessWidget {
 }
 
 class _TabActionRow extends StatelessWidget {
-  const _TabActionRow({required this.title, required this.action});
+  const _TabActionRow({
+    required this.title,
+    required this.description,
+    required this.action,
+    this.note,
+  });
 
   final String title;
+  final String description;
   final Widget action;
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -1157,10 +1154,27 @@ class _TabActionRow extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: AppColors.text,
-              ),
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.text,
+                  ),
             ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              description,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+            ),
+            if (note != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                note!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textMuted,
+                      fontStyle: FontStyle.italic,
+                    ),
+              ),
+            ],
           ],
         );
 
@@ -1214,7 +1228,7 @@ class _DetectionLogRow extends StatelessWidget {
         color: isKnown ? AppColors.success : AppColors.warning,
       ),
       title: title,
-      subtitle: log.cameraName,
+      subtitle: 'Camera: ${log.cameraName}',
       timestamp: formatBackendTimestamp(log.detectedAt),
       onTap: deleting ? null : () => onSelected(!selected),
     );
@@ -1302,7 +1316,7 @@ class _AlertRow extends StatelessWidget {
         ],
       ),
       title: '${alert.categoryTitle}: $title',
-      subtitle: '${alert.cameraName} • ${alert.message}',
+      subtitle: 'Camera: ${alert.cameraName} • ${alert.message}',
       timestamp: formatBackendTimestamp(alert.createdAt),
       trailing: TextButton(
         onPressed: onToggleRead,
@@ -1339,8 +1353,8 @@ class _SelectableRecordCard extends StatelessWidget {
     final borderColor = selected
         ? AppColors.teal
         : severe
-        ? AppColors.dangerBorder
-        : AppColors.border;
+            ? AppColors.dangerBorder
+            : AppColors.border;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Card(
@@ -1379,7 +1393,9 @@ class _SelectableRecordCard extends StatelessWidget {
                             title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
                                 ?.copyWith(
                                   fontWeight: FontWeight.w900,
                                   color: AppColors.text,
@@ -1390,7 +1406,9 @@ class _SelectableRecordCard extends StatelessWidget {
                             '$subtitle · $timestamp',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
                                 ?.copyWith(color: AppColors.textMuted),
                           ),
                         ],
@@ -1457,9 +1475,9 @@ class _SelectionToolbar extends StatelessWidget {
               child: Text(
                 label,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.tealDark,
-                  fontWeight: FontWeight.w900,
-                ),
+                      color: AppColors.tealDark,
+                      fontWeight: FontWeight.w900,
+                    ),
               ),
             ),
             TextButton(
@@ -1534,7 +1552,7 @@ class _ErrorPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return EmptyPanel(
       icon: Icons.error_outline,
-      title: 'Could not load logs',
+      title: 'Could not load Activity',
       message: message,
       compact: true,
       action: OutlinedButton.icon(

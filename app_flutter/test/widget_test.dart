@@ -1,4 +1,5 @@
 import 'package:app_flutter/app.dart';
+import 'package:app_flutter/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,27 +19,39 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull, reason: 'dashboard overflow');
 
-      expect(find.text('Operational Overview'), findsOneWidget);
-      expect(find.text('Dashboard'), findsWidgets);
-      expect(find.text('Members'), findsWidgets);
-      expect(find.text('Register'), findsWidgets);
-      expect(find.text('Surveillance'), findsWidgets);
-      expect(find.text('Logs'), findsWidgets);
+      expect(find.text('Overview'), findsWidgets);
+      expect(find.text('People'), findsWidgets);
+      expect(find.text('Monitor'), findsWidgets);
+      expect(find.text('Investigations'), findsWidgets);
+      expect(find.text('Activity'), findsWidgets);
 
-      await _tapDestination(tester, Icons.person_add_alt_1_outlined);
+      await _tapDestination(tester, Icons.people_alt_outlined);
+      expect(find.text('Registered people'), findsWidgets);
+      expect(find.text('Register a person'), findsOneWidget);
+      await tester.tap(find.text('Register a person'));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: 'register overflow');
       expect(find.text('Person details'), findsOneWidget);
       expect(find.text('No images selected'), findsOneWidget);
 
       await _tapDestination(tester, Icons.videocam_outlined);
       expect(tester.takeException(), isNull, reason: 'surveillance overflow');
-      expect(find.text('Surveillance'), findsWidgets);
-      expect(find.text('Camera preview'), findsOneWidget);
+      expect(find.text('Monitor'), findsWidgets);
+      expect(find.text('Live monitoring'), findsOneWidget);
+      expect(find.text('Quick video scan'), findsOneWidget);
+      expect(find.text('Live monitoring preview'), findsOneWidget);
 
       await _tapDestination(tester, Icons.receipt_long_outlined);
       expect(tester.takeException(), isNull, reason: 'logs overflow');
-      expect(find.text('Persistent Logs & Alerts'), findsOneWidget);
-      expect(find.text('Security filters'), findsOneWidget);
+      expect(find.text('Activity'), findsWidgets);
+      expect(
+        find.textContaining(
+          entry.value.width < AppBreakpoints.compact
+              ? 'Detections'
+              : 'Live detections',
+        ),
+        findsWidgets,
+      );
     });
   }
 
@@ -55,13 +68,66 @@ void main() {
     await tester.tap(find.text('Vietnamese'));
     await tester.pumpAndSettle();
     expect(find.text('Cài đặt'), findsWidgets);
-    expect(find.text('Tổng quan vận hành'), findsOneWidget);
+    expect(find.text('Tổng quan'), findsWidgets);
+    expect(find.text('Mọi người'), findsOneWidget);
+    expect(find.text('Theo dõi'), findsOneWidget);
+    expect(find.text('Điều tra'), findsOneWidget);
+    expect(find.text('Hoạt động'), findsOneWidget);
 
     await tester.tap(find.text('Tối'));
     await tester.pumpAndSettle();
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.dark);
   });
+
+  testWidgets(
+    'Overview quick actions open the correct destinations and modes',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({'app_language': 'en'});
+      await _setViewport(tester, const Size(1440, 900));
+      await tester.pumpWidget(const FaceSecurityApp());
+      await tester.pump();
+
+      Future<void> tapAction(String key) async {
+        final action = find.byKey(ValueKey(key));
+        await tester.ensureVisible(action);
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+      }
+
+      Future<void> returnToOverview() async {
+        await _tapDestination(tester, Icons.dashboard_outlined);
+        await tester.pump();
+      }
+
+      await tapAction('overview-register-action');
+      expect(find.text('Person details'), findsOneWidget);
+      await returnToOverview();
+
+      await _tapDestination(tester, Icons.people_alt_outlined);
+      await tester.pumpAndSettle();
+      expect(find.text('Registered people'), findsWidgets);
+      expect(find.text('Person details'), findsNothing);
+      await returnToOverview();
+
+      await tapAction('overview-live-monitoring-action');
+      expect(find.text('Live monitoring preview'), findsOneWidget);
+      await returnToOverview();
+
+      await tapAction('overview-quick-scan-action');
+      expect(find.text('Quick video scan preview'), findsOneWidget);
+      await returnToOverview();
+
+      await tapAction('overview-investigation-action');
+      expect(find.text('Investigations'), findsWidgets);
+      await returnToOverview();
+
+      await tapAction('overview-activity-action');
+      expect(find.text('Activity'), findsWidgets);
+      expect(find.textContaining('Live detections'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('desktop sidebar collapses to compact navigation', (
     tester,
@@ -81,15 +147,85 @@ void main() {
     expect(find.byIcon(Icons.keyboard_double_arrow_right), findsOneWidget);
 
     await _tapDestination(tester, Icons.people_alt_outlined);
-    expect(find.byIcon(Icons.people_alt_outlined), findsNothing);
-    expect(find.byIcon(Icons.people_alt), findsWidgets);
+    expect(
+      find.descendant(of: sidebar, matching: find.byIcon(Icons.people_alt)),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byIcon(Icons.keyboard_double_arrow_right));
     await tester.pumpAndSettle();
     expect(tester.getSize(sidebar).width, 260);
   });
 
-  testWidgets('video panel slides closed to give chat more space', (
+  final monitorViewports = <String, ({Size size, bool split})>{
+    '390x844': (size: const Size(390, 844), split: false),
+    '768x1024': (size: const Size(768, 1024), split: false),
+    '1280x720': (size: const Size(1280, 720), split: true),
+    '1440x900': (size: const Size(1440, 900), split: true),
+  };
+
+  for (final entry in monitorViewports.entries) {
+    testWidgets(
+      'Monitor prioritizes the preview without overflow at ${entry.key}',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({'app_language': 'en'});
+        await _setViewport(tester, entry.value.size);
+        await tester.pumpWidget(const FaceSecurityApp());
+        await tester.pump();
+
+        await _tapDestination(tester, Icons.videocam_outlined);
+        await tester.pump(const Duration(milliseconds: 300));
+
+        final preview = find.byKey(const ValueKey('monitor-preview-panel'));
+        final secondary = find.byKey(const ValueKey('monitor-secondary-panel'));
+        expect(preview, findsOneWidget);
+        expect(secondary, findsOneWidget);
+
+        if (entry.value.split) {
+          expect(tester.getTopLeft(preview).dy, lessThan(300));
+          expect(
+            find.byKey(const ValueKey('monitor-split-layout')),
+            findsOneWidget,
+          );
+          expect(
+            tester.getTopLeft(preview).dx,
+            lessThan(tester.getTopLeft(secondary).dx),
+          );
+          expect(
+            tester.getTopLeft(preview).dy,
+            tester.getTopLeft(secondary).dy,
+          );
+        } else {
+          expect(
+            tester.getTopLeft(preview).dy,
+            lessThan(entry.value.size.height / 2),
+          );
+          expect(
+            find.byKey(const ValueKey('monitor-stacked-layout')),
+            findsOneWidget,
+          );
+          expect(
+            tester.getTopLeft(preview).dy,
+            lessThan(tester.getTopLeft(secondary).dy),
+          );
+        }
+
+        expect(tester.takeException(), isNull);
+
+        await tester.tap(find.text('Quick video scan').first);
+        await tester.pump();
+
+        expect(find.text('Quick video scan preview'), findsOneWidget);
+        expect(
+          tester.getTopLeft(preview).dy,
+          lessThanOrEqualTo(tester.getTopLeft(secondary).dy),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('empty Investigations progressively hides the video rail', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -100,17 +236,12 @@ void main() {
     await _tapDestination(tester, Icons.psychology_outlined);
     await tester.pump(const Duration(milliseconds: 300));
 
-    final videoRail = find.byKey(const ValueKey('video-rail'));
-    expect(tester.getSize(videoRail).width, 360);
-
-    await tester.tap(find.byKey(const ValueKey('collapse-video-rail')));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.getSize(videoRail).width, 52);
-    expect(find.byKey(const ValueKey('expand-video-rail')), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('expand-video-rail')));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.getSize(videoRail).width, 360);
+    expect(find.byKey(const ValueKey('video-rail')), findsNothing);
+    expect(find.text('Add video'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('investigations-toolbar-add-video')),
+      findsNothing,
+    );
   });
 
   testWidgets('conversation history opens at a readable desktop width', (
@@ -145,23 +276,23 @@ void main() {
     await _tapDestination(tester, Icons.psychology_outlined);
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Surveillance Video Q&A'), findsOneWidget);
+    expect(find.text('Investigations'), findsWidgets);
     expect(
       find.text(
-        'Choose a video, ask questions, and review timestamped evidence',
+        'Upload and index videos persistently for deeper security-event analysis and Q&A. Indexed incidents appear in Activity.',
       ),
       findsOneWidget,
     );
-    expect(find.text('Add video'), findsWidgets);
-    expect(find.text('No videos yet'), findsWidgets);
+    expect(find.text('Add video'), findsOneWidget);
+    expect(find.text('Add your first investigation video'), findsOneWidget);
+    expect(find.text('Upload and index video'), findsNothing);
+    expect(find.text('No videos yet'), findsNothing);
     expect(find.text('Suggestions'), findsNothing);
     expect(
       find.text('Did anyone take the backpack from the table?'),
       findsNothing,
     );
-    expect(find.text('Scope: No videos yet'), findsOneWidget);
-
-    expect(find.text('Hỏi đáp video giám sát'), findsNothing);
+    expect(find.text('Điều tra'), findsNothing);
     expect(find.text('Thêm video'), findsNothing);
     expect(find.text('Chưa có video'), findsNothing);
     expect(find.text('Gợi ý'), findsNothing);
@@ -178,7 +309,13 @@ Future<void> _setViewport(WidgetTester tester, Size size) async {
 }
 
 Future<void> _tapDestination(WidgetTester tester, IconData icon) async {
-  final finder = find.byIcon(icon);
+  final sidebar = find.byKey(const ValueKey('desktop-sidebar'));
+  final finder = sidebar.evaluate().isNotEmpty
+      ? find.descendant(of: sidebar, matching: find.byIcon(icon))
+      : find.descendant(
+          of: find.byType(NavigationBar),
+          matching: find.byIcon(icon),
+        );
   expect(finder, findsWidgets);
   await tester.tap(finder.first);
   await tester.pump();

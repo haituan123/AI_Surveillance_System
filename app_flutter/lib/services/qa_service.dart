@@ -14,10 +14,10 @@ class QAService {
     String? baseUrl,
     Duration requestTimeout = const Duration(seconds: 25),
     Duration askTimeout = const Duration(seconds: 150),
-  }) : _client = client ?? http.Client(),
-       baseUrl = baseUrl ?? ApiConfig.baseUrl,
-       _requestTimeout = requestTimeout,
-       _askTimeout = askTimeout;
+  })  : _client = client ?? http.Client(),
+        baseUrl = baseUrl ?? ApiConfig.baseUrl,
+        _requestTimeout = requestTimeout,
+        _askTimeout = askTimeout;
 
   final http.Client _client;
   final String baseUrl;
@@ -35,9 +35,10 @@ class QAService {
     Map<String, String>? headers,
     Object? body,
     Duration? timeout,
-  }) => _client
-      .post(uri, headers: headers, body: body)
-      .timeout(timeout ?? _requestTimeout);
+  }) =>
+      _client
+          .post(uri, headers: headers, body: body)
+          .timeout(timeout ?? _requestTimeout);
 
   Future<http.Response> _delete(Uri uri) =>
       _client.delete(uri).timeout(_requestTimeout);
@@ -159,9 +160,8 @@ class QAService {
       throw const ApiException('Selected video data is not available.');
     }
 
-    final streamedResponse = await _client
-        .send(request)
-        .timeout(const Duration(minutes: 5));
+    final streamedResponse =
+        await _client.send(request).timeout(const Duration(minutes: 5));
     final response = await http.Response.fromStream(streamedResponse);
     _ensureSuccess(response);
 

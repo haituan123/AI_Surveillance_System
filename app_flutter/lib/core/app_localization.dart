@@ -9,8 +9,12 @@ class AppTranslator {
     'Settings': 'Cài đặt',
     'Collapse navigation': 'Thu gọn thanh điều hướng',
     'Expand navigation': 'Mở rộng thanh điều hướng',
+    'Primary navigation': 'Điều hướng chính',
     'Collapse video panel': 'Thu gọn khu vực video',
     'Expand video panel': 'Mở khu vực video',
+    'Dismiss error': 'Đóng thông báo lỗi',
+    'Previous videos': 'Các video trước',
+    'Next videos': 'Các video tiếp theo',
     'Language': 'Ngôn ngữ',
     'English': 'Tiếng Anh',
     'Vietnamese': 'Tiếng Việt',
@@ -18,6 +22,11 @@ class AppTranslator {
     'Light': 'Sáng',
     'Dark': 'Tối',
     'Close': 'Đóng',
+    'Overview': 'Tổng quan',
+    'People': 'Mọi người',
+    'Monitor': 'Theo dõi',
+    'Investigations': 'Điều tra',
+    'Activity': 'Hoạt động',
     'Dashboard': 'Tổng quan',
     'Members': 'Thành viên',
     'Register': 'Đăng ký',
@@ -26,6 +35,10 @@ class AppTranslator {
     'Logs': 'Nhật ký',
     'AI Face Security': 'An ninh nhận diện khuôn mặt AI',
     'Operational Overview': 'Tổng quan vận hành',
+    'Review system health, live monitoring, recognition coverage, and recent security activity.':
+        'Xem tình trạng hệ thống, theo dõi trực tiếp, phạm vi nhận diện và hoạt động an ninh gần đây.',
+    'Live status, members, alerts, and activity could not be refreshed. Check the backend server and connection.':
+        'Không thể làm mới trạng thái trực tiếp, thành viên, cảnh báo và Hoạt động. Hãy kiểm tra máy chủ và kết nối.',
     'Monitor backend health, camera activity, recognition coverage, and recent alert activity.':
         'Theo dõi trạng thái máy chủ, camera, nhận diện và các cảnh báo gần đây.',
     'System status': 'Trạng thái hệ thống',
@@ -42,11 +55,28 @@ class AppTranslator {
         'Chưa có phát hiện trực tiếp nào được lưu',
     'Uploaded-video results are temporary and do not appear here.':
         'Kết quả video tải lên chỉ là tạm thời và không xuất hiện tại đây.',
+    'Quick video scan results are temporary and do not appear in Overview or Activity.':
+        'Kết quả Quét nhanh video chỉ là tạm thời và không xuất hiện trong Tổng quan hoặc Hoạt động.',
     'No recent alerts': 'Không có cảnh báo gần đây',
     'Unknown-person alerts from live mode will appear here.':
         'Cảnh báo người lạ từ chế độ trực tiếp sẽ xuất hiện tại đây.',
+    'Saved unknown-person alerts from Live monitoring will appear here.':
+        'Cảnh báo người lạ được lưu từ Theo dõi trực tiếp sẽ xuất hiện tại đây.',
     'Open logs': 'Mở nhật ký',
     'View logs': 'Xem nhật ký',
+    'Open activity': 'Mở Hoạt động',
+    'View activity': 'Xem Hoạt động',
+    'Quick actions': 'Thao tác nhanh',
+    'Register a person': 'Đăng ký một người',
+    'Start live monitoring': 'Bắt đầu Theo dõi trực tiếp',
+    'Run a quick video scan': 'Chạy Quét nhanh video',
+    'Start a video investigation': 'Bắt đầu điều tra video',
+    'Get started in three steps': 'Bắt đầu với ba bước',
+    'Register people.': 'Đăng ký người dùng.',
+    'Start live monitoring or scan a video.':
+        'Bắt đầu Theo dõi trực tiếp hoặc quét một video.',
+    'Review Activity or investigate footage.':
+        'Xem Hoạt động hoặc điều tra cảnh quay.',
     'Retry': 'Thử lại',
     'Review registered people and manage saved face images.':
         'Xem người đã đăng ký và quản lý ảnh khuôn mặt đã lưu.',
@@ -73,6 +103,8 @@ class AppTranslator {
     'Person name': 'Tên người',
     'Enter the name used in alerts and logs':
         'Nhập tên dùng trong cảnh báo và nhật ký',
+    'Enter the name used in alerts and Activity':
+        'Nhập tên dùng trong cảnh báo và Hoạt động',
     'Face images': 'Ảnh khuôn mặt',
     'Choose face images': 'Chọn ảnh khuôn mặt',
     'Replace images': 'Thay ảnh',
@@ -88,6 +120,13 @@ class AppTranslator {
     'Registering...': 'Đang đăng ký...',
     'Monitor the live webcam or analyze a temporary uploaded video.':
         'Theo dõi webcam trực tiếp hoặc phân tích video tải lên tạm thời.',
+    'Use Live monitoring for saved webcam detections and alerts, or Quick video scan for temporary results.':
+        'Dùng Theo dõi trực tiếp để lưu phát hiện và cảnh báo từ webcam, hoặc Quét nhanh video để xem kết quả tạm thời.',
+    'Live monitoring': 'Theo dõi trực tiếp',
+    'Quick video scan': 'Quét nhanh video',
+    'Live monitoring controls': 'Điều khiển theo dõi trực tiếp',
+    'Uses a webcam to detect known and unknown people and restricted-zone violations. Detections and alerts are saved to Activity.':
+        'Sử dụng webcam để phát hiện người quen, người lạ và vi phạm vùng hạn chế. Các phát hiện và cảnh báo được lưu vào Hoạt động.',
     'Live webcam': 'Webcam trực tiếp',
     'Upload video': 'Tải video lên',
     'Upload Video': 'Tải video lên',
@@ -96,11 +135,15 @@ class AppTranslator {
     'No camera configured': 'Chưa cấu hình camera',
     'Add the laptop webcam before starting live surveillance.':
         'Thêm webcam máy tính trước khi bắt đầu giám sát trực tiếp.',
+    'Add the laptop webcam before starting live monitoring.':
+        'Thêm webcam máy tính trước khi bắt đầu Theo dõi trực tiếp.',
     'Add laptop webcam': 'Thêm webcam máy tính',
     'Start': 'Bắt đầu',
     'Stop': 'Dừng',
     'Camera preview': 'Xem trước camera',
     'Video preview': 'Xem trước video',
+    'Live monitoring preview': 'Xem trước Theo dõi trực tiếp',
+    'Quick video scan preview': 'Xem trước Quét nhanh video',
     'Camera unavailable': 'Camera không khả dụng',
     'Retry camera': 'Thử lại camera',
     'Backend unavailable': 'Máy chủ không khả dụng',
@@ -109,29 +152,74 @@ class AppTranslator {
     'Camera stopped': 'Camera đã dừng',
     'Start surveillance to show the live camera feed.':
         'Bắt đầu giám sát để hiển thị hình ảnh trực tiếp.',
+    'Start live monitoring to show the webcam feed.':
+        'Bắt đầu Theo dõi trực tiếp để hiển thị hình ảnh webcam.',
+    'Start live monitoring before placing points.':
+        'Bắt đầu Theo dõi trực tiếp trước khi đặt điểm.',
     'No video selected': 'Chưa chọn video',
     'Choose a video to begin temporary analysis.':
         'Chọn video để bắt đầu phân tích tạm thời.',
+    'Choose one video to start a temporary Quick video scan.':
+        'Chọn một video để bắt đầu Quét nhanh video tạm thời.',
     'Preparing preview': 'Đang chuẩn bị xem trước',
     'Frames will appear as the uploaded video is processed.':
         'Khung hình sẽ xuất hiện khi video tải lên được xử lý.',
+    'Immediate results will appear as the Quick video scan runs.':
+        'Kết quả tức thì sẽ xuất hiện trong khi Quét nhanh video chạy.',
     'Waiting for frame': 'Đang chờ khung hình',
     'A preview frame will appear when analysis produces one.':
         'Khung hình xem trước sẽ xuất hiện khi có kết quả phân tích.',
     'Temporary mode: events and frames are not saved to history.':
         'Chế độ tạm thời: sự kiện và khung hình không được lưu vào lịch sử.',
+    'Upload one video for immediate, temporary analysis. Results are not saved to Activity or history.':
+        'Tải lên một video để phân tích tạm thời và xem kết quả ngay. Kết quả không được lưu vào Hoạt động hoặc lịch sử.',
     'Choose video': 'Chọn video',
+    'Choose video for quick scan': 'Chọn video để quét nhanh',
     'Cancel analysis': 'Hủy phân tích',
     'Clear result': 'Xóa kết quả',
+    'Cancel quick scan': 'Hủy quét nhanh',
+    'Clear quick scan result': 'Xóa kết quả quét nhanh',
     'No video': 'Không có video',
     'Last detection': 'Phát hiện gần nhất',
+    'Latest Live monitoring detection':
+        'Phát hiện mới nhất từ Theo dõi trực tiếp',
     'No live detection result': 'Chưa có kết quả phát hiện trực tiếp',
+    'No Live monitoring detection yet':
+        'Chưa có phát hiện từ Theo dõi trực tiếp',
     'Start the camera to see recognized and unknown people.':
         'Bật camera để xem người quen và người lạ.',
+    'Start Live monitoring to detect known and unknown people.':
+        'Bắt đầu Theo dõi trực tiếp để phát hiện người quen và người lạ.',
     'Known person': 'Người quen',
     'Unknown Person': 'Người lạ',
     'Unknown person': 'Người lạ',
     'Security filters': 'Bộ lọc an ninh',
+    'Filter': 'Bộ lọc',
+    'All': 'Tất cả',
+    'Known': 'Người quen',
+    'Unknown': 'Người lạ',
+    'Live detections': 'Phát hiện trực tiếp',
+    'Live alerts': 'Cảnh báo trực tiếp',
+    'Weapons': 'Vũ khí',
+    'Violence / Fighting': 'Bạo lực / Đánh nhau',
+    'Fire / Smoke': 'Cháy / Khói',
+    'Theft / Robbery': 'Trộm cắp / Cướp',
+    'Known and unknown people detected and saved during Live monitoring.':
+        'Người quen và người lạ được phát hiện và lưu trong Theo dõi trực tiếp.',
+    'Unknown-person, restricted-area, and loitering alerts saved during Live monitoring.':
+        'Cảnh báo người lạ, vùng hạn chế và lảng vảng được lưu trong Theo dõi trực tiếp.',
+    'Persistent security incidents generated from indexed Investigation videos.':
+        'Các sự cố an ninh lâu dài được tạo từ video Điều tra đã lập chỉ mục.',
+    'To remove these incidents, delete their source video in Investigations.':
+        'Để xóa các sự cố này, hãy xóa video nguồn trong Điều tra.',
+    'Try selecting a different detection filter.':
+        'Hãy thử chọn bộ lọc phát hiện khác.',
+    'Try selecting a different alert filter.':
+        'Hãy thử chọn bộ lọc cảnh báo khác.',
+    'Try selecting a different incident filter.':
+        'Hãy thử chọn bộ lọc sự cố khác.',
+    'Camera: ': 'Camera: ',
+    'Investigation video: ': 'Video điều tra: ',
     'All events': 'Tất cả sự kiện',
     'Clear filters': 'Xóa bộ lọc',
     'Fighting': 'Đánh nhau',
@@ -187,31 +275,54 @@ class AppTranslator {
     'Clear': 'Xóa',
     'Delete zone': 'Xóa khu vực',
     'Temporary events': 'Sự kiện tạm thời',
+    'Quick video scan results': 'Kết quả Quét nhanh video',
     'No temporary events': 'Không có sự kiện tạm thời',
+    'No Quick video scan results': 'Chưa có kết quả Quét nhanh video',
+    'Choose one video to show temporary results here. Nothing is saved to Activity.':
+        'Chọn một video để hiển thị kết quả tạm thời tại đây. Không có dữ liệu nào được lưu vào Hoạt động.',
     'Choose a video to show analysis events here.':
         'Chọn video để hiển thị sự kiện phân tích tại đây.',
     'Permission needed': 'Cần cấp quyền',
     'Request failed': 'Yêu cầu thất bại',
     'Dismiss': 'Bỏ qua',
     'Persistent Logs & Alerts': 'Nhật ký và cảnh báo đã lưu',
+    'Review saved Live monitoring detections and alerts, plus incidents indexed by Investigations. Quick video scan results never appear here.':
+        'Xem các phát hiện và cảnh báo đã lưu từ Theo dõi trực tiếp, cùng các sự cố được lập chỉ mục trong Điều tra. Kết quả Quét nhanh video không xuất hiện tại đây.',
     'Review live detections, alerts, and indexed security events in one place.':
         'Xem phát hiện trực tiếp, cảnh báo và sự kiện an ninh đã lập chỉ mục tại một nơi.',
     'Only live-webcam events are saved. Uploaded-video events never appear here.':
         'Chỉ sự kiện webcam trực tiếp được lưu. Sự kiện video tải lên không xuất hiện tại đây.',
     'Detection logs': 'Nhật ký phát hiện',
+    'Detections': 'Phát hiện',
+    'Investigation incidents': 'Sự cố điều tra',
+    'Incidents': 'Sự cố',
     'Alerts': 'Cảnh báo',
     'Security events': 'Sự kiện an ninh',
     'Indexed security events': 'Sự kiện an ninh đã lập chỉ mục',
+    'No indexed investigation incidents':
+        'Chưa có sự cố điều tra được lập chỉ mục',
+    'Upload and index a video in Investigations to add incidents to Activity.':
+        'Tải lên và lập chỉ mục video trong Điều tra để thêm sự cố vào Hoạt động.',
     'Loading security events': 'Đang tải sự kiện an ninh',
     'No matching security events': 'Không có sự kiện an ninh phù hợp',
+    'Loading investigation incidents': 'Đang tải sự cố điều tra',
+    'No matching investigation incidents': 'Không có sự cố điều tra phù hợp',
     'No indexed security events': 'Chưa có sự kiện an ninh được lập chỉ mục',
     'Analyze a Q&A video to create security events.':
         'Phân tích video Hỏi đáp để tạo sự kiện an ninh.',
     'Live detection history': 'Lịch sử phát hiện trực tiếp',
+    'Live monitoring detections': 'Phát hiện từ Theo dõi trực tiếp',
     'Alert inbox': 'Hộp thư cảnh báo',
     'Delete all logs': 'Xóa toàn bộ nhật ký',
     'Delete all alerts': 'Xóa toàn bộ cảnh báo',
     'No live detection logs': 'Không có nhật ký phát hiện trực tiếp',
+    'No saved Live monitoring detections':
+        'Chưa có phát hiện nào được lưu từ Theo dõi trực tiếp',
+    'No matching detections': 'Không có phát hiện phù hợp',
+    'Start Live monitoring to save known or unknown people and restricted-zone violations here.':
+        'Bắt đầu Theo dõi trực tiếp để lưu người quen, người lạ và vi phạm vùng hạn chế tại đây.',
+    'Saved alerts from Live monitoring appear here.':
+        'Cảnh báo được lưu từ Theo dõi trực tiếp sẽ xuất hiện tại đây.',
     'Start live surveillance to create history.':
         'Bắt đầu giám sát trực tiếp để tạo lịch sử.',
     'No persistent alerts': 'Không có cảnh báo đã lưu',
@@ -224,7 +335,47 @@ class AppTranslator {
     'Loading alerts': 'Đang tải cảnh báo',
     'Loading detection logs': 'Đang tải nhật ký phát hiện',
     'Could not load logs': 'Không thể tải nhật ký',
+    'Loading detections': 'Đang tải phát hiện',
+    'Could not load Activity': 'Không thể tải Hoạt động',
+    'Delete all detections': 'Xóa toàn bộ phát hiện',
+    'Delete detection': 'Xóa phát hiện',
+    'Delete detections': 'Xóa các phát hiện',
+    'Delete this saved detection from Activity?':
+        'Xóa phát hiện đã lưu này khỏi Hoạt động?',
+    'Delete all saved detections from Activity?':
+        'Xóa toàn bộ phát hiện đã lưu khỏi Hoạt động?',
+    'Deleted selected detection.': 'Đã xóa phát hiện được chọn.',
+    'Deleted all detections.': 'Đã xóa toàn bộ phát hiện.',
+    'Delete these ': 'Xóa ',
+    ' saved detections from Activity?': ' phát hiện đã lưu khỏi Hoạt động?',
+    'Deleted ': 'Đã xóa ',
+    ' detection selected': ' phát hiện được chọn',
+    ' detections': ' phát hiện',
+    ' alerts': ' cảnh báo',
+    ' incidents': ' sự cố',
     'Security Video Q&A Assistant': 'Trợ lý Hỏi - Đáp Video Giám Sát (CCTV QA)',
+    'Upload and index videos persistently for deeper security-event analysis and Q&A. Indexed incidents appear in Activity.':
+        'Tải lên và lập chỉ mục video lâu dài để phân tích sâu sự kiện an ninh và hỏi đáp. Các sự cố đã lập chỉ mục xuất hiện trong Hoạt động.',
+    'Upload and index video': 'Tải lên và lập chỉ mục video',
+    'Upload and index a video for persistent investigation':
+        'Tải lên và lập chỉ mục video để điều tra lâu dài',
+    'Add video': 'Thêm video',
+    'Add your first investigation video':
+        'Thêm video điều tra đầu tiên của bạn',
+    'The video will be indexed for persistent security analysis, questions, and timestamped evidence.':
+        'Video sẽ được lập chỉ mục để phân tích an ninh lâu dài, đặt câu hỏi và xem bằng chứng theo mốc thời gian.',
+    'Scope: ': 'Phạm vi: ',
+    'All videos': 'Tất cả video',
+    'Selected: ': 'Đã chọn: ',
+    'Select video': 'Chọn video',
+    'Ready': 'Sẵn sàng',
+    'Processing': 'Đang xử lý',
+    'Failed': 'Thất bại',
+    'Manage video library': 'Quản lý thư viện video',
+    'Video options': 'Tùy chọn video',
+    'Use this video': 'Dùng video này',
+    'Technical details': 'Chi tiết kỹ thuật',
+    'Ask question': 'Đặt câu hỏi',
     'Natural-language surveillance questions • Weapons, theft, clothing colors & timestamps':
         'Hỗ trợ hỏi đáp tự nhiên • Suy luận vũ khí, trộm cắp, màu áo và mốc thời gian',
     'New conversation': 'Phiên mới',
@@ -240,6 +391,8 @@ class AppTranslator {
     'Delete this conversation': 'Xóa phiên này',
     'Start asking questions about surveillance footage':
         'Bắt đầu đặt câu hỏi về dữ liệu camera giám sát',
+    'Start asking questions about indexed investigation videos':
+        'Bắt đầu đặt câu hỏi về các video điều tra đã lập chỉ mục',
     'Examples: “Did anyone take a backpack?”, “Is anyone holding a knife?”, “Who is wearing red?”':
         'Ví dụ: “Có ai lấy balo không?”, “Có người nào cầm dao không?”, “Ai mặc áo đỏ?”',
     'Translation & AI reasoning': 'Bản dịch và suy luận AI',
@@ -263,11 +416,17 @@ class AppTranslator {
     'Delete video and related data': 'Xóa video và dữ liệu liên quan',
     'Live surveillance started.': 'Đã bắt đầu giám sát trực tiếp.',
     'Live surveillance stopped.': 'Đã dừng giám sát trực tiếp.',
+    'Live monitoring started. Detections and alerts will be saved to Activity.':
+        'Đã bắt đầu Theo dõi trực tiếp. Các phát hiện và cảnh báo sẽ được lưu vào Hoạt động.',
+    'Live monitoring stopped.': 'Đã dừng Theo dõi trực tiếp.',
     'Laptop webcam added.': 'Đã thêm webcam máy tính.',
     'Restricted zone saved.': 'Đã lưu khu vực hạn chế.',
     'Restricted zone deleted.': 'Đã xóa khu vực hạn chế.',
     'Video analysis submitted.': 'Đã gửi video để phân tích.',
     'Video analysis cleared.': 'Đã xóa kết quả phân tích video.',
+    'Quick video scan started. Results will not be saved to Activity.':
+        'Đã bắt đầu Quét nhanh video. Kết quả sẽ không được lưu vào Hoạt động.',
+    'Quick video scan result cleared.': 'Đã xóa kết quả Quét nhanh video.',
     'Alert marked read.': 'Đã đánh dấu cảnh báo là đã đọc.',
     'Alert marked unread.': 'Đã đánh dấu cảnh báo là chưa đọc.',
     'Permission denied. Allow camera/file access and try again.':
